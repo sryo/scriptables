@@ -3,8 +3,12 @@
 // icon-color: deep-gray; icon-glyph: bars;
 // ZenTrate: A Minimalist Productivity Launcher Widget for Scriptable
 
+// Function to check if device is using dark appearance
+async function isUsingDarkAppearance() {
+  return !(Color.dynamic(Color.white(), Color.black()).red)
+}
+
 let widget = new ListWidget()
-widget.backgroundColor = new Color("#000000")
 
 // File path for storing usage statistics
 const STATS_FILE = FileManager.local().documentsDirectory() + "widget_usage_stats.json"
@@ -69,46 +73,55 @@ function getFontSize(usageCount) {
   return Math.round(minSize + (usageCount / maxUsage) * range)
 }
 
-// Create a stack layout for two columns
-let rowStack = widget.addStack()
-rowStack.layoutHorizontally()
+// Main function to create the widget
+async function createWidget() {
+  // Set background color based on appearance
+  const isDarkMode = await isUsingDarkAppearance()
+  widget.backgroundColor = isDarkMode ? new Color("#000000") : new Color("#FFFFFF")
 
-// Left column for apps
-let appsStack = rowStack.addStack()
-appColumn = appsStack.addStack()
-appColumn.layoutVertically()
+  // Create a stack layout for two columns
+  let rowStack = widget.addStack()
+  rowStack.layoutHorizontally()
 
-rowStack.addSpacer(48)
+  // Left column for apps
+  let appsStack = rowStack.addStack()
+  let appColumn = appsStack.addStack()
+  appColumn.layoutVertically()
 
-// Right column for shortcuts
-let shortcutsStack = rowStack.addStack()
-shortcutColumn = shortcutsStack.addStack()
-shortcutColumn.layoutVertically()
+  rowStack.addSpacer(48)
 
-items.forEach(item => {
-  let itemText
-  const usageCount = usageStats[item.name] || 0
-  if (item.type === 'shortcut') {
-    itemText = shortcutColumn.addText(item.name)
-    itemText.font = Font.systemFont(getFontSize(usageCount))
-  } else {
-    itemText = appColumn.addText(item.name)
-    itemText.font = Font.boldSystemFont(getFontSize(usageCount))
-  }
-  itemText.textColor = Color.white()
-  itemText.minimumScaleFactor = 0.5
-  itemText.lineLimit = 1
-  itemText.url = item.scheme
-  
-  // Update usage count when item is tapped
-  itemText.url = `scriptable:///run?scriptName=${encodeURIComponent(Script.name())}&shortcut=${encodeURIComponent(item.name)}&originalUrl=${encodeURIComponent(item.scheme)}`
-  
-  if (item.type === 'shortcut') {
-    shortcutColumn.addSpacer(12)
-  } else {
-    appColumn.addSpacer(12)
-  }
-})
+  // Right column for shortcuts
+  let shortcutsStack = rowStack.addStack()
+  let shortcutColumn = shortcutsStack.addStack()
+  shortcutColumn.layoutVertically()
+
+  items.forEach(item => {
+    let itemText
+    const usageCount = usageStats[item.name] || 0
+    if (item.type === 'shortcut') {
+      itemText = shortcutColumn.addText(item.name)
+      itemText.font = Font.systemFont(getFontSize(usageCount))
+    } else {
+      itemText = appColumn.addText(item.name)
+      itemText.font = Font.boldSystemFont(getFontSize(usageCount))
+    }
+    itemText.textColor = isDarkMode ? Color.white() : Color.black()
+    itemText.minimumScaleFactor = 0.5
+    itemText.lineLimit = 1
+    itemText.url = item.scheme
+    
+    // Update usage count when item is tapped
+    itemText.url = `scriptable:///run?scriptName=${encodeURIComponent(Script.name())}&shortcut=${encodeURIComponent(item.name)}&originalUrl=${encodeURIComponent(item.scheme)}`
+    
+    if (item.type === 'shortcut') {
+      shortcutColumn.addSpacer(12)
+    } else {
+      appColumn.addSpacer(12)
+    }
+  })
+
+  return widget
+}
 
 // Set padding for the widget
 widget.setPadding(0, 0, 0, 0)
@@ -121,10 +134,15 @@ if (args.queryParameters.shortcut) {
   Safari.open(originalUrl)
   Script.complete()
 } else {
-  // Present the widget
-  if (config.runsInWidget) {
-    Script.setWidget(widget)
-  } else {
-    widget.presentLarge()
+  // Create and present the widget
+  async function run() {
+    let widget = await createWidget()
+    if (config.runsInWidget) {
+      Script.setWidget(widget)
+    } else {
+      widget.presentLarge()
+    }
   }
+
+  await run()
 }
