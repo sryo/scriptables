@@ -1,3 +1,6 @@
+// Variables used by Scriptable.
+// These must be at the very top of the file. Do not edit.
+// icon-color: deep-gray; icon-glyph: bars;
 // ZenTrate: A Minimalist Productivity Launcher Widget for Scriptable
 
 let widget = new ListWidget()
@@ -36,17 +39,19 @@ let usageStats = loadStats()
 // Define your shortcuts and apps with their corresponding scheme links
 const items = [
   { name: "Avisarme en...", type: "shortcut", scheme: "shortcuts://run-shortcut?name=Avisarme%20en" },
-  { name: "Capturar audio", type: "shortcut", scheme: "shortcuts://run-shortcut?name=Escuchar" },
-  { name: "Capturar foto", type: "shortcut", scheme: "shortcuts://run-shortcut?name=Capturar" },
-  { name: "Capturar nota", type: "shortcut", scheme: "shortcuts://run-shortcut?name=Anotar" },
-  { name: "Capturar video", type: "shortcut", scheme: "shortcuts://run-shortcut?name=Grabar%20video" },
-  { name: "Leer QR", type: "shortcut", scheme: "shortcuts://run-shortcut?name=Escanear%20QR" },
-  { name: "Pagar con QR", type: "shortcut", scheme: "shortcuts://run-shortcut?name=Pagar" },
-  { name: "Reconocer tema", type: "shortcut", scheme: "shortcuts://run-shortcut?name=Qué%20suena" },
-  { name: "Ver dirección", type: "shortcut", scheme: "shortcuts://run-shortcut?name=Dónde%20queda" },
+  { name: "Buscar", type: "shortcut", scheme: "shortcuts://run-shortcut?name=Buscar" },
+  { name: "Crear audio", type: "shortcut", scheme: "shortcuts://run-shortcut?name=Crear%20audio" },
+  { name: "Crear foto", type: "shortcut", scheme: "shortcuts://run-shortcut?name=Crear%20foto" },
+  { name: "Crear nota", type: "shortcut", scheme: "shortcuts://run-shortcut?name=Crear%20nota" },
+  { name: "Crear video", type: "shortcut", scheme: "shortcuts://run-shortcut?name=Crear%20video" },
+  { name: "Leer QR", type: "shortcut", scheme: "shortcuts://run-shortcut?name=Leer%20QR" },
+  { name: "Pagar con QR", type: "shortcut", scheme: "shortcuts://run-shortcut?name=Pagar%20con%20QR" },
+  { name: "Reconocer tema", type: "shortcut", scheme: "shortcuts://run-shortcut?name=Reconocer%20tema" },
+  { name: "Ver dirección", type: "shortcut", scheme: "shortcuts://run-shortcut?name=Ver%20dirección" },
   { name: "Ajustes", type: "app", scheme: "App-prefs://" },
   { name: "Clima", type: "app", scheme: "weather://" },
-  { name: "Doble factor", type: "app", scheme: "otpauth://" },
+  { name: "Doble factor", type: "app", scheme: "googleauthenticator://" },
+  { name: "Feedly", type: "app", scheme: "feedly://" },
   { name: "Fotos", type: "app", scheme: "googlephotos://" },
   { name: "Instagram", type: "app", scheme: "instagram://" },
   { name: "Mail", type: "app", scheme: "message://" },
@@ -57,7 +62,7 @@ const items = [
 
 // Function to calculate font size based on usage count
 function getFontSize(usageCount) {
-  const minSize = 14
+  const minSize = 10
   const maxSize = 32
   const maxUsage = Math.max(...Object.values(usageStats))
   const range = maxSize - minSize
