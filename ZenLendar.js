@@ -1,12 +1,20 @@
 // Variables used by Scriptable.
 // These must be at the very top of the file. Do not edit.
 // icon-color: deep-gray; icon-glyph: calendar;
-// ZenLendar: A Minimalist Calendar Widget for Scriptable
+// ZenLendar: A Customizable Minimalist Calendar Widget for Scriptable
 
-// Function to check if device is using dark appearance
-async function isUsingDarkAppearance() {
-  return !(Color.dynamic(Color.white(), Color.black()).red)
+// Get widget parameters or use defaults
+let params = []
+if (args.widgetParameter) {
+  params = args.widgetParameter.split(",")
+} else if (args.queryParameters && args.queryParameters.widgetParameter) {
+  params = args.queryParameters.widgetParameter.split(",")
 }
+
+let bgColor = params.find(p => p.startsWith("bg:"))?.replace("bg:", "") || "000000"
+let textColor = params.find(p => p.startsWith("text:"))?.replace("text:", "") || "FFFFFF"
+let fontName = params.find(p => p.startsWith("font:"))?.replace("font:", "") || "systemFont"
+let maxEvents = parseInt(params.find(p => p.startsWith("max:"))?.replace("max:", "")) || 7
 
 // Function to get upcoming events
 async function getUpcomingEvents() {
@@ -15,7 +23,7 @@ async function getUpcomingEvents() {
   let futureDate = new Date(now.getTime() + 86400000 * 365) // One year from now
   
   let events = await CalendarEvent.between(now, futureDate, calendars)
-  return events.slice(0, 7) // Limit events
+  return events.slice(0, maxEvents) // Limit events based on maxEvents parameter
 }
 
 // Function to format relative time
@@ -71,13 +79,26 @@ function getFontSize(index) {
   return Math.max(size, minSize)
 }
 
+// Function to get the appropriate font
+function getFont(size, isBold = false) {
+  switch (fontName.toLowerCase()) {
+    case "serif":
+      return isBold ? Font.heavySerifFont(size) : Font.serifFont(size)
+    case "monospaced":
+      return isBold ? Font.heavyMonospacedSystemFont(size) : Font.monospaceSystemFont(size)
+    case "rounded":
+      return isBold ? Font.heavyRoundedSystemFont(size) : Font.roundedSystemFont(size)
+    default:
+      return isBold ? Font.boldSystemFont(size) : Font.systemFont(size)
+  }
+}
+
 // Main function to create the widget
 async function createWidget() {
   let widget = new ListWidget()
   
-  // Set background color based on appearance
-  const isDarkMode = await isUsingDarkAppearance()
-  widget.backgroundColor = isDarkMode ? new Color("#000000") : new Color("#FFFFFF")
+  // Set background color
+  widget.backgroundColor = new Color("#" + bgColor)
   
   // Set up the widget to open the Calendar app when tapped
   widget.url = "calshow://"
@@ -96,14 +117,14 @@ async function createWidget() {
       eventStack.layoutHorizontally()
       
       let titleText = eventStack.addText(event.title)
-      titleText.textColor = isDarkMode ? Color.white() : Color.black()
-      titleText.font = Font.systemFont(fontSize)
+      titleText.textColor = new Color("#" + textColor)
+      titleText.font = getFont(fontSize)
       
       eventStack.addSpacer()
       
       let timeText = eventStack.addText(formatRelativeTime(event))
-      timeText.textColor = isDarkMode ? Color.white() : Color.black()
-      timeText.font = Font.systemFont(fontSize - 2)
+      timeText.textColor = new Color("#" + textColor)
+      timeText.font = getFont(fontSize - 2)
       
       if (eventIndex < group.length - 1) {
         stack.addSpacer(4) // Smaller space between events in the same group
