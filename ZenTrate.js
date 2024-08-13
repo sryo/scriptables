@@ -121,73 +121,61 @@ function getFont(size, isBold = false) {
 
 // Function to calculate font size based on usage count
 function getFontSize(usageCount) {
-  const minSize = 8
+  const minSize = 10
   const maxSize = 36
   const maxUsage = Math.max(...Object.values(usageStats), 1)
   const range = maxSize - minSize
   return Math.round(minSize + (usageCount / maxUsage) * range)
 }
 
-// Function to display empty state with instructions
-function showEmptyState() {
-  let stack = widget.addStack()
-  stack.layoutVertically()
-  stack.centerAlignContent()
-  
-  stack.addSpacer(8)
-  
-  let instructions = stack.addText("To get started, edit the 'zentrate_config.json' file in your Scriptable iCloud folder. Add your shortcuts and apps, then refresh the widget.")
-  instructions.font = Font.systemFont(12)
-  instructions.textColor = new Color("#" + textColor)
-  instructions.textAlignment = Text.Alignment.Center
-  instructions.minimumScaleFactor = 0.5
-}
-
 // Create widget content
-if (sortedItems.length === 0) {
-  showEmptyState()
-} else {
-  // Create a stack layout for two columns
-  let rowStack = widget.addStack()
-  rowStack.layoutHorizontally()
+// Create a stack layout for two columns
+let rowStack = widget.addStack()
+rowStack.layoutHorizontally()
 
-  // Left column for apps
-  let appsStack = rowStack.addStack()
-  let appColumn = appsStack.addStack()
-  appColumn.layoutVertically()
+// Left column for apps
+let appsStack = rowStack.addStack()
+let appColumn = appsStack.addStack()
+appColumn.layoutVertically()
 
-  rowStack.addSpacer()
+rowStack.addSpacer()
 
-  // Right column for shortcuts
-  let shortcutsStack = rowStack.addStack()
-  let shortcutColumn = shortcutsStack.addStack()
-  shortcutColumn.layoutVertically()
+// Right column for shortcuts
+let shortcutsStack = rowStack.addStack()
+let shortcutColumn = shortcutsStack.addStack()
+shortcutColumn.layoutVertically()
 
-  sortedItems.forEach(item => {
-    let itemText
-    const usageCount = usageStats[item.name] || 0
-    if (item.type === 'shortcut') {
-      itemText = shortcutColumn.addText(item.name)
-      itemText.font = getFont(getFontSize(usageCount))
-    } else {
-      itemText = appColumn.addText(item.name)
-      itemText.font = getFont(getFontSize(usageCount), true)
-    }
-    itemText.textColor = new Color("#" + textColor)
-    itemText.minimumScaleFactor = 0.5
-    itemText.lineLimit = 1
-    itemText.url = `scriptable:///run?scriptName=${encodeURIComponent(Script.name())}&shortcut=${encodeURIComponent(item.name)}&originalUrl=${encodeURIComponent(item.scheme)}`
-    
-    if (item.type === 'shortcut') {
-      shortcutColumn.addSpacer(12)
-    } else {
-      appColumn.addSpacer(12)
-    }
-  })
-}
+sortedItems.forEach(item => {
+  let itemStack
+  if (item.type === 'shortcut') {
+    itemStack = shortcutColumn.addStack()
+  } else {
+    itemStack = appColumn.addStack()
+  }
+  itemStack.setPadding(2, 8, 2, 8)
+  
+  const usageCount = usageStats[item.name] || 0
+  let itemText = itemStack.addText(item.name)
+  
+  if (item.type === 'shortcut') {
+    itemText.font = getFont(getFontSize(usageCount))
+  } else {
+    itemText.font = getFont(getFontSize(usageCount), true)
+  }
+  itemText.textColor = new Color("#" + textColor)
+  itemText.minimumScaleFactor = 0.5
+  itemText.lineLimit = 1
+  itemStack.url = `scriptable:///run?scriptName=${encodeURIComponent(Script.name())}&shortcut=${encodeURIComponent(item.name)}&originalUrl=${encodeURIComponent(item.scheme)}`
+  
+  if (item.type === 'shortcut') {
+    shortcutColumn.addSpacer(4)
+  } else {
+    appColumn.addSpacer(4)
+  }
+})
 
 // Set padding for the widget
-widget.setPadding(0, 8, 0, 8)
+widget.setPadding(0, 0, 0, 0)
 
 // Handle shortcut/app opening and usage count update
 if (args.queryParameters && args.queryParameters.shortcut) {
