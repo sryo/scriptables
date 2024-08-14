@@ -45,7 +45,7 @@ function saveThemeConfig(config) {
 // Function to save a theme to the themes folder
 function saveTheme(theme, filename) {
   const themePath = fm.joinPath(THEMES_FOLDER, filename)
-  const themeString = `// ZenTrate Theme\n${JSON.stringify(theme, null, 2)}`
+  const themeString = JSON.stringify(theme, null, 2)
   fm.writeString(themePath, themeString)
 }
 
@@ -57,11 +57,15 @@ function loadThemes() {
     if (file.endsWith('.json')) {
       const themePath = fm.joinPath(THEMES_FOLDER, file)
       const themeString = fm.readString(themePath)
-      const theme = JSON.parse(themeString.split('\n').slice(1).join('\n'))
+      const theme = JSON.parse(themeString)
       theme.filename = file
       themes.push(theme)
     }
   }
+  
+  // Sort themes alphabetically by name
+  themes.sort((a, b) => a.name.localeCompare(b.name))
+  
   return themes
 }
 
