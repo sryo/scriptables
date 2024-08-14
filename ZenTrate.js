@@ -1,9 +1,55 @@
 // Variables used by Scriptable.
 // These must be at the very top of the file. Do not edit.
 // icon-color: deep-gray; icon-glyph: bars;
-// ZenTrate: A Configurable Productivity Launcher Widget for Scriptable
+// ZenTrate.js: A Configurable Productivity Launcher Widget for Scriptable
 
-let widget = new ListWidget()
+// Theme configuration
+const THEME_FILE = FileManager.iCloud().documentsDirectory() + "/zentrate_theme.json"
+
+function loadThemeConfig() {
+  if (FileManager.iCloud().fileExists(THEME_FILE)) {
+    const configString = FileManager.iCloud().readString(THEME_FILE)
+    return JSON.parse(configString)
+  }
+  return {
+    bgColor: "000000",
+    textColor: "FFFFFF",
+    fontName: "system",
+    fontWeight: "regular",
+    fontItalic: false
+  }
+}
+
+function getFont(size, config = loadThemeConfig()) {
+  const fontType = (config.fontName || "system").toLowerCase();
+  const weight = config.fontWeight || "semibold";
+  const isItalic = config.fontItalic || false;
+  
+  const weightFunctions = {
+    ultralight: "ultraLight",
+    thin: "thin",
+    light: "light",
+    regular: "regular",
+    medium: "medium",
+    semibold: "semibold",
+    bold: "bold",
+    heavy: "heavy",
+    black: "black"
+  };
+
+  let fontFunction = `${weightFunctions[weight] || "regular"}`;
+  if (fontType === "monospaced") fontFunction += "Monospaced";
+  if (fontType === "rounded") fontFunction += "Rounded";
+  fontFunction += "SystemFont";
+
+  if (isItalic && weight === "regular") {
+    return Font.italicSystemFont(size);
+  }
+
+  return Font[fontFunction](size);
+}
+
+const themeConfig = loadThemeConfig()
 
 // File paths
 const CONFIG_FILE = FileManager.iCloud().documentsDirectory() + "/zentrate_config.json"
@@ -66,28 +112,12 @@ function updateUsageCount(name) {
 let config = loadConfig()
 let usageStats = loadStats()
 
-// Get widget parameters or use defaults
-let params = []
-if (args.widgetParameter) {
-  params = args.widgetParameter.split(",")
-} else if (args.queryParameters && args.queryParameters.widgetParameter) {
-  params = args.queryParameters.widgetParameter.split(",")
-}
+// Set default values for widget configuration
+let showApps = true
+let showShortcuts = true
+let sortMethod = "alphabetical"
 
-let showApps = params.includes("apps")
-let showShortcuts = params.includes("shortcuts")
-if (!showApps && !showShortcuts) {
-  showApps = true
-  showShortcuts = true
-}
-let bgColor = params.find(p => p.startsWith("bg:"))?.replace("bg:", "") || "000000"
-let textColor = params.find(p => p.startsWith("text:"))?.replace("text:", "") || "FFFFFF"
-let fontName = params.find(p => p.startsWith("font:"))?.replace("font:", "") || "systemFont"
-let sortMethod = params.find(p => p.startsWith("sort:"))?.replace("sort:", "") || "alphabetical"
-
-widget.backgroundColor = new Color("#" + bgColor)
-
-// Filter items based on showApps and showShortcuts parameters
+// Filter items based on showApps and showShortcuts
 const filteredItems = config.items.filter(item => 
   (showApps && item.type === 'app') || (showShortcuts && item.type === 'shortcut')
 )
@@ -105,79 +135,64 @@ function sortItems(items) {
 
 const sortedItems = sortItems(filteredItems)
 
-// Function to get the appropriate font
-function getFont(size, isBold = false) {
-  switch (fontName.toLowerCase()) {
-    case "serif":
-      return isBold ? Font.heavySerifFont(size) : Font.serifFont(size)
-    case "monospaced":
-      return isBold ? Font.heavyMonospacedSystemFont(size) : Font.monospaceSystemFont(size)
-    case "rounded":
-      return isBold ? Font.heavyRoundedSystemFont(size) : Font.roundedSystemFont(size)
-    default:
-      return isBold ? Font.boldSystemFont(size) : Font.systemFont(size)
-  }
-}
-
 // Function to calculate font size based on usage count
 function getFontSize(usageCount) {
-  const minSize = 10
+  const minSize = 8
   const maxSize = 36
   const maxUsage = Math.max(...Object.values(usageStats), 1)
   const range = maxSize - minSize
   return Math.round(minSize + (usageCount / maxUsage) * range)
 }
 
-// Create widget content
-// Create a stack layout for two columns
-let rowStack = widget.addStack()
-rowStack.layoutHorizontally()
+// Function to create the widget
+function createWidget() {
+  let widget = new ListWidget()
+  widget.backgroundColor = new Color("#" + themeConfig.bgColor)
 
-// Left column for apps
-let appsStack = rowStack.addStack()
-let appColumn = appsStack.addStack()
-appColumn.layoutVertically()
+  // Create a stack layout for two columns
+  let rowStack = widget.addStack()
+  rowStack.layoutHorizontally()
 
-rowStack.addSpacer()
+  // Left column for apps
+  let appsStack = rowStack.addStack()
+  let appColumn = appsStack.addStack()
+  appColumn.layoutVertically()
 
-// Right column for shortcuts
-let shortcutsStack = rowStack.addStack()
-let shortcutColumn = shortcutsStack.addStack()
-shortcutColumn.layoutVertically()
+  rowStack.addSpacer()
 
-sortedItems.forEach(item => {
-  let itemStack
-  if (item.type === 'shortcut') {
-    itemStack = shortcutColumn.addStack()
-  } else {
-    itemStack = appColumn.addStack()
-  }
-  itemStack.setPadding(2, 8, 2, 8)
-  
-  const usageCount = usageStats[item.name] || 0
-  let itemText = itemStack.addText(item.name)
-  
-  if (item.type === 'shortcut') {
-    itemText.font = getFont(getFontSize(usageCount))
-  } else {
-    itemText.font = getFont(getFontSize(usageCount), true)
-  }
-  itemText.textColor = new Color("#" + textColor)
-  itemText.minimumScaleFactor = 0.5
-  itemText.lineLimit = 1
-  itemStack.url = `scriptable:///run?scriptName=${encodeURIComponent(Script.name())}&shortcut=${encodeURIComponent(item.name)}&originalUrl=${encodeURIComponent(item.scheme)}`
-  
-  if (item.type === 'shortcut') {
-    shortcutColumn.addSpacer(4)
-  } else {
-    appColumn.addSpacer(4)
-  }
-})
+  // Right column for shortcuts
+  let shortcutsStack = rowStack.addStack()
+  let shortcutColumn = shortcutsStack.addStack()
+  shortcutColumn.layoutVertically()
 
-// Set padding for the widget
-widget.setPadding(0, 0, 0, 0)
+  sortedItems.forEach(item => {
+    let itemStack
+    if (item.type === 'shortcut') {
+      itemStack = shortcutColumn.addStack()
+    } else {
+      itemStack = appColumn.addStack()
+    }
+    itemStack.setPadding(4, 12, 4, 12)
+    
+    const usageCount = usageStats[item.name] || 0
+    let itemText = itemStack.addText(item.name)
+    itemText.font = getFont(getFontSize(usageCount), "semibold")
+    itemText.textColor = new Color("#" + themeConfig.textColor)
+    itemText.minimumScaleFactor = 0.5
+    itemText.lineLimit = 1
+    itemStack.url = `scriptable:///run?scriptName=${encodeURIComponent(Script.name())}&shortcut=${encodeURIComponent(item.name)}&originalUrl=${encodeURIComponent(item.scheme)}`
+    
+    if (item.type === 'shortcut') {
+      shortcutColumn.addSpacer(2)
+    } else {
+      appColumn.addSpacer(2)
+    }
+  })
+  widget.setPadding(0, 0, 0, 0)
+  return widget
+}
 
-// Handle shortcut/app opening and usage count update
+// Handle actions
 if (args.queryParameters && args.queryParameters.shortcut) {
   const shortcutName = decodeURIComponent(args.queryParameters.shortcut)
   const originalUrl = decodeURIComponent(args.queryParameters.originalUrl)
@@ -185,7 +200,8 @@ if (args.queryParameters && args.queryParameters.shortcut) {
   Safari.open(originalUrl)
   Script.complete()
 } else {
-  // Present the widget
+  // Create and present the widget
+  let widget = createWidget()
   if (config.runsInWidget) {
     Script.setWidget(widget)
   } else {

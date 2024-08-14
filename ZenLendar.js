@@ -1,20 +1,58 @@
 // Variables used by Scriptable.
 // These must be at the very top of the file. Do not edit.
 // icon-color: deep-gray; icon-glyph: calendar;
-// ZenLendar: A Customizable Minimalist Calendar Widget for Scriptable
+// ZenLendar.js: A Customizable Minimalist Calendar Widget for Scriptable
 
-// Get widget parameters or use defaults
-let params = []
-if (args.widgetParameter) {
-  params = args.widgetParameter.split(",")
-} else if (args.queryParameters && args.queryParameters.widgetParameter) {
-  params = args.queryParameters.widgetParameter.split(",")
+// Theme configuration
+const THEME_FILE = FileManager.iCloud().documentsDirectory() + "/zentrate_theme.json"
+
+function loadThemeConfig() {
+  if (FileManager.iCloud().fileExists(THEME_FILE)) {
+    const configString = FileManager.iCloud().readString(THEME_FILE)
+    return JSON.parse(configString)
+  }
+  return {
+    bgColor: "000000",
+    textColor: "FFFFFF",
+    fontName: "system",
+    fontWeight: "regular",
+    fontItalic: false
+  }
 }
 
-let bgColor = params.find(p => p.startsWith("bg:"))?.replace("bg:", "") || "000000"
-let textColor = params.find(p => p.startsWith("text:"))?.replace("text:", "") || "FFFFFF"
-let fontName = params.find(p => p.startsWith("font:"))?.replace("font:", "") || "systemFont"
-let maxEvents = parseInt(params.find(p => p.startsWith("max:"))?.replace("max:", "")) || 7
+function getFont(size, config = loadThemeConfig()) {
+  const fontType = (config.fontName || "system").toLowerCase();
+  const weight = config.fontWeight || "semibold";
+  const isItalic = config.fontItalic || false;
+  
+  const weightFunctions = {
+    ultralight: "ultraLight",
+    thin: "thin",
+    light: "light",
+    regular: "regular",
+    medium: "medium",
+    semibold: "semibold",
+    bold: "bold",
+    heavy: "heavy",
+    black: "black"
+  };
+
+  let fontFunction = `${weightFunctions[weight] || "regular"}`;
+  if (fontType === "monospaced") fontFunction += "Monospaced";
+  if (fontType === "rounded") fontFunction += "Rounded";
+  fontFunction += "SystemFont";
+
+  if (isItalic && weight === "regular") {
+    return Font.italicSystemFont(size);
+  }
+
+  return Font[fontFunction](size);
+}
+
+const themeConfig = loadThemeConfig()
+
+// Set a default value for maxEvents
+const maxEvents = 7
 
 // Function to get upcoming events
 async function getUpcomingEvents() {
@@ -23,7 +61,7 @@ async function getUpcomingEvents() {
   let futureDate = new Date(now.getTime() + 86400000 * 365) // One year from now
   
   let events = await CalendarEvent.between(now, futureDate, calendars)
-  return events.slice(0, maxEvents) // Limit events based on maxEvents parameter
+  return events.slice(0, maxEvents) // Limit events based on maxEvents
 }
 
 // Function to format relative time
@@ -71,79 +109,56 @@ function groupEventsByStartTime(events) {
 
 // Function to calculate font size based on group index
 function getFontSize(index) {
-  const maxSize = 14
-  const minSize = 6
-  const decayFactor = 0.35 // Adjust this value to control the steepness of the decay
+  const maxSize = 18
+  const minSize = 8
+  const decayFactor = 0.5 // Adjust this value to control the steepness of the decay
   
   const size = maxSize * Math.exp(-decayFactor * index)
   return Math.max(size, minSize)
 }
 
-// Function to get the appropriate font
-function getFont(size, isBold = false) {
-  switch (fontName.toLowerCase()) {
-    case "serif":
-      return isBold ? Font.heavySerifFont(size) : Font.serifFont(size)
-    case "monospaced":
-      return isBold ? Font.heavyMonospacedSystemFont(size) : Font.monospaceSystemFont(size)
-    case "rounded":
-      return isBold ? Font.heavyRoundedSystemFont(size) : Font.roundedSystemFont(size)
-    default:
-      return isBold ? Font.boldSystemFont(size) : Font.systemFont(size)
-  }
-}
-
-// Main function to create the widget
+// Function to create the widget
 async function createWidget() {
   let widget = new ListWidget()
-  
-  // Set background color
-  widget.backgroundColor = new Color("#" + bgColor)
-  
-  // Set up the widget to open the Calendar app when tapped
-  widget.url = "calshow://"
-  
+  widget.backgroundColor = new Color("#" + themeConfig.bgColor)
+
   let events = await getUpcomingEvents()
   let groupedEvents = groupEventsByStartTime(events)
-  
-  let stack = widget.addStack()
-  stack.layoutVertically()
   
   groupedEvents.forEach((group, groupIndex) => {
     let fontSize = getFontSize(groupIndex)
     
     group.forEach((event, eventIndex) => {
-      let eventStack = stack.addStack()
+      let eventStack = widget.addStack()
       eventStack.layoutHorizontally()
       
       let titleText = eventStack.addText(event.title)
-      titleText.textColor = new Color("#" + textColor)
+      titleText.textColor = new Color("#" + themeConfig.textColor)
       titleText.font = getFont(fontSize)
       
       eventStack.addSpacer()
       
       let timeText = eventStack.addText(formatRelativeTime(event))
-      timeText.textColor = new Color("#" + textColor)
+      timeText.textColor = new Color("#" + themeConfig.textColor)
       timeText.font = getFont(fontSize - 2)
       
       if (eventIndex < group.length - 1) {
-        stack.addSpacer(4) // Smaller space between events in the same group
+        widget.addSpacer(10) // Space between events in the same group
       }
     })
     
     if (groupIndex < groupedEvents.length - 1) {
-      stack.addSpacer(12) // Larger space between different groups
+      widget.addSpacer(10) // Space between different groups
     }
   })
-  
+
+  widget.setPadding(0, 12, 0, 12)
   return widget
 }
 
-// Run the script
+// Create and present the widget
 async function run() {
   let widget = await createWidget()
-  // Set padding for the widget
-  widget.setPadding(0, 8, 0, 8)
   if (config.runsInWidget) {
     Script.setWidget(widget)
   } else {
