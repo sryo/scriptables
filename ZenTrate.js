@@ -15,41 +15,33 @@ function loadThemeConfig() {
     bgColor: "000000",
     textColor: "FFFFFF",
     fontName: "system",
-    fontWeight: "regular",
-    fontItalic: false
+    fontWeight: "bold",
+    fontItalic: false,
+    minFontSize: 10,
+    maxFontSize: 30
   }
-}
-
-function getFont(size, config = loadThemeConfig()) {
-  const fontType = (config.fontName || "system").toLowerCase();
-  const weight = config.fontWeight || "semibold";
-  const isItalic = config.fontItalic || false;
-  
-  const weightFunctions = {
-    ultralight: "ultraLight",
-    thin: "thin",
-    light: "light",
-    regular: "regular",
-    medium: "medium",
-    semibold: "semibold",
-    bold: "bold",
-    heavy: "heavy",
-    black: "black"
-  };
-
-  let fontFunction = `${weightFunctions[weight] || "regular"}`;
-  if (fontType === "monospaced") fontFunction += "Monospaced";
-  if (fontType === "rounded") fontFunction += "Rounded";
-  fontFunction += "SystemFont";
-
-  if (isItalic && weight === "regular") {
-    return Font.italicSystemFont(size);
-  }
-
-  return Font[fontFunction](size);
 }
 
 const themeConfig = loadThemeConfig()
+
+function getFont(size, config = themeConfig) {
+  const fontName = config.fontName || "System";
+  const weight = config.fontWeight || "regular";
+  const isItalic = config.fontItalic || false;
+
+  let font;
+  if (fontName.toLowerCase() === "system") {
+    font = Font[weight + "SystemFont"](size);
+  } else {
+    font = new Font(fontName, size);
+  }
+
+  if (isItalic) {
+    font = Font.italicSystemFont(size);
+  }
+
+  return font;
+}
 
 // File paths
 const CONFIG_FILE = FileManager.iCloud().documentsDirectory() + "/zentrate_config.json"
@@ -137,8 +129,8 @@ const sortedItems = sortItems(filteredItems)
 
 // Function to calculate font size based on usage count
 function getFontSize(usageCount) {
-  const minSize = 8
-  const maxSize = 36
+  const minSize = themeConfig.minFontSize
+  const maxSize = themeConfig.maxFontSize
   const maxUsage = Math.max(...Object.values(usageStats), 1)
   const range = maxSize - minSize
   return Math.round(minSize + (usageCount / maxUsage) * range)
@@ -176,7 +168,7 @@ function createWidget() {
     
     const usageCount = usageStats[item.name] || 0
     let itemText = itemStack.addText(item.name)
-    itemText.font = getFont(getFontSize(usageCount), "semibold")
+    itemText.font = getFont(getFontSize(usageCount))
     itemText.textColor = new Color("#" + themeConfig.textColor)
     itemText.minimumScaleFactor = 0.5
     itemText.lineLimit = 1

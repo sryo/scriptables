@@ -1,0 +1,12 @@
+// ZenTrate Theme
+{
+  "name": "Noir",
+  "author": "sryo",
+  "bgColor": "000000",
+  "textColor": "FFFFFF",
+  "fontName": "system",
+  "fontWeight": "semibold",
+  "fontItalic": false,
+  "minFontSize": 10,
+  "maxFontSize": 30
+}

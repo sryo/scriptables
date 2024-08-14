@@ -1,0 +1,12 @@
+// ZenTrate Theme
+{
+  "name": "Elegant",
+  "author": "sryo",
+  "bgColor": "FDF5E6",
+  "textColor": "8B4513",
+  "fontName": "Zapfino",
+  "fontWeight": "regular",
+  "fontItalic": false,
+  "minFontSize": 26,
+  "maxFontSize": 26
+}

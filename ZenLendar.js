@@ -15,47 +15,69 @@ function loadThemeConfig() {
     bgColor: "000000",
     textColor: "FFFFFF",
     fontName: "system",
-    fontWeight: "regular",
-    fontItalic: false
+    fontWeight: "bold",
+    fontItalic: false,
+    minFontSize: 10,
+    maxFontSize: 20
   }
-}
-
-function getFont(size, config = loadThemeConfig()) {
-  const fontType = (config.fontName || "system").toLowerCase();
-  const weight = config.fontWeight || "semibold";
-  const isItalic = config.fontItalic || false;
-  
-  const weightFunctions = {
-    ultralight: "ultraLight",
-    thin: "thin",
-    light: "light",
-    regular: "regular",
-    medium: "medium",
-    semibold: "semibold",
-    bold: "bold",
-    heavy: "heavy",
-    black: "black"
-  };
-
-  let fontFunction = `${weightFunctions[weight] || "regular"}`;
-  if (fontType === "monospaced") fontFunction += "Monospaced";
-  if (fontType === "rounded") fontFunction += "Rounded";
-  fontFunction += "SystemFont";
-
-  if (isItalic && weight === "regular") {
-    return Font.italicSystemFont(size);
-  }
-
-  return Font[fontFunction](size);
 }
 
 const themeConfig = loadThemeConfig()
 
-// Set a default value for maxEvents
-const maxEvents = 7
+function getFont(size, config = themeConfig) {
+  const fontName = config.fontName || "System";
+  const weight = config.fontWeight || "regular";
+  const isItalic = config.fontItalic || false;
+
+  let font;
+  if (fontName.toLowerCase() === "system") {
+    font = Font[weight + "SystemFont"](size);
+  } else {
+    font = new Font(fontName, size);
+  }
+
+  if (isItalic) {
+    font = Font.italicSystemFont(size);
+  }
+
+  return font;
+}
+
+// Function to calculate font size based on event index
+function getFontSize(index) {
+  const maxSize = themeConfig.maxFontSize
+  const minSize = themeConfig.minFontSize
+  const decayFactor = 0.5 // Adjust this value to control the steepness of the decay
+  
+  const size = maxSize * Math.exp(-decayFactor * index)
+  return Math.max(size, minSize)
+}
+
+// Function to calculate the number of events that can fit
+function calculateMaxEvents() {
+  const height = 155 // Both small and medium widgets have the same height
+  const availableHeight = height - 16 // Subtracting vertical padding
+
+  let totalHeight = 0
+  let eventCount = 0
+  
+  while (totalHeight < availableHeight && eventCount < 10) { // Set a reasonable upper limit
+    const fontSize = getFontSize(eventCount)
+    
+    totalHeight += fontSize + 8 // Event height + padding
+    
+    if (totalHeight <= availableHeight) {
+      eventCount++
+    } else {
+      break
+    }
+  }
+  
+  return eventCount
+}
 
 // Function to get upcoming events
-async function getUpcomingEvents() {
+async function getUpcomingEvents(maxEvents) {
   let calendars = await Calendar.forEvents()
   let now = new Date()
   let futureDate = new Date(now.getTime() + 86400000 * 365) // One year from now
@@ -94,65 +116,41 @@ function formatRelativeTime(event) {
   }
 }
 
-// Function to group events by start time
-function groupEventsByStartTime(events) {
-  let groupedEvents = {}
-  events.forEach(event => {
-    let startTime = event.startDate.getTime()
-    if (!groupedEvents[startTime]) {
-      groupedEvents[startTime] = []
-    }
-    groupedEvents[startTime].push(event)
-  })
-  return Object.values(groupedEvents)
-}
-
-// Function to calculate font size based on group index
-function getFontSize(index) {
-  const maxSize = 18
-  const minSize = 8
-  const decayFactor = 0.5 // Adjust this value to control the steepness of the decay
-  
-  const size = maxSize * Math.exp(-decayFactor * index)
-  return Math.max(size, minSize)
-}
 
 // Function to create the widget
 async function createWidget() {
   let widget = new ListWidget()
   widget.backgroundColor = new Color("#" + themeConfig.bgColor)
 
-  let events = await getUpcomingEvents()
-  let groupedEvents = groupEventsByStartTime(events)
+  // Set up the widget to open the Calendar app when tapped
+  widget.url = "calshow://"
+
+  const maxEvents = calculateMaxEvents()
+  let events = await getUpcomingEvents(maxEvents)
   
-  groupedEvents.forEach((group, groupIndex) => {
-    let fontSize = getFontSize(groupIndex)
+  events.forEach((event, index) => {
+    let eventStack = widget.addStack()
+    eventStack.layoutHorizontally()
     
-    group.forEach((event, eventIndex) => {
-      let eventStack = widget.addStack()
-      eventStack.layoutHorizontally()
-      
-      let titleText = eventStack.addText(event.title)
-      titleText.textColor = new Color("#" + themeConfig.textColor)
-      titleText.font = getFont(fontSize)
-      
-      eventStack.addSpacer()
-      
-      let timeText = eventStack.addText(formatRelativeTime(event))
-      timeText.textColor = new Color("#" + themeConfig.textColor)
-      timeText.font = getFont(fontSize - 2)
-      
-      if (eventIndex < group.length - 1) {
-        widget.addSpacer(10) // Space between events in the same group
-      }
-    })
+    let fontSize = getFontSize(index)
     
-    if (groupIndex < groupedEvents.length - 1) {
-      widget.addSpacer(10) // Space between different groups
+    let titleText = eventStack.addText(event.title)
+    titleText.textColor = new Color("#" + themeConfig.textColor)
+    titleText.font = getFont(fontSize)
+    titleText.lineLimit = 1
+    
+    eventStack.addSpacer()
+    
+    let timeText = eventStack.addText(formatRelativeTime(event))
+    timeText.textColor = new Color("#" + themeConfig.textColor)
+    timeText.font = getFont(fontSize - 2)
+    
+    if (index < events.length - 1) {
+      widget.addSpacer(8) // Space between events
     }
   })
 
-  widget.setPadding(0, 12, 0, 12)
+  widget.setPadding(8, 12, 8, 12)
   return widget
 }
 
@@ -162,8 +160,30 @@ async function run() {
   if (config.runsInWidget) {
     Script.setWidget(widget)
   } else {
-    widget.presentMedium()
+    if (config.runsInApp) {
+      const options = ["Small", "Medium"]
+      let selectedIndex = await presentAlert("Choose Widget Size", options)
+      let sizes = [["small"], ["medium"]]
+      config.widgetFamily = sizes[selectedIndex][0]
+    }
+    if (config.widgetFamily === "small") {
+      await widget.presentSmall()
+    } else {
+      await widget.presentMedium()
+    }
   }
+}
+
+async function presentAlert(prompt, items) {
+  let alert = new Alert()
+  alert.message = prompt
+  
+  for (const item of items) {
+    alert.addAction(item)
+  }
+  
+  let response = await alert.presentAlert()
+  return response
 }
 
 await run()

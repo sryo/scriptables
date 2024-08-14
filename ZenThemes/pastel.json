@@ -1,0 +1,12 @@
+// ZenTrate Theme
+{
+  "name": "Pastel",
+  "author": "sryo",
+  "bgColor": "F0E6EF",
+  "textColor": "7D6B7D",
+  "fontName": "Avenir Next",
+  "fontWeight": "regular",
+  "fontItalic": false,
+  "minFontSize": 14,
+  "maxFontSize": 32
+}

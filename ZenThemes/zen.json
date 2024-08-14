@@ -1,0 +1,12 @@
+// ZenTrate Theme
+{
+  "name": "Zen",
+  "author": "sryo",
+  "bgColor": "FFFFFF",
+  "textColor": "333333",
+  "fontName": "system",
+  "fontWeight": "regular",
+  "fontItalic": false,
+  "minFontSize": 18,
+  "maxFontSize": 18
+}

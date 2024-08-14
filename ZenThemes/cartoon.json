@@ -1,0 +1,12 @@
+// ZenTrate Theme
+{
+  "name": "Cartoon",
+  "author": "sryo",
+  "bgColor": "FFFACD",
+  "textColor": "FF6347",
+  "fontName": "Marker Felt",
+  "fontWeight": "wide",
+  "fontItalic": false,
+  "minFontSize": 20,
+  "maxFontSize": 20
+}
