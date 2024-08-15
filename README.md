@@ -25,7 +25,7 @@ ZenTrate offers a clutter-free, elegant interface to streamline your digital lif
 
 ### ZenTrate.js
 
-- **Customizing Items**: Edit the `zentrate_config.json` file to add or remove items. Each item can be an app, shortcut, or any other action that supports a URL scheme. To find the appropriate URL schemes for apps or shortcuts, you can search online for resources like [iOS URL Schemes](https://handleopenurl.com/).
+- **Customizing Items**: Edit the `zentrate_config.json` file to add or remove items. Each item can be an app, shortcut, or any other action that supports a URL scheme.
 
 - **Sorting**: Items can be sorted alphabetically or by usage frequency.
 - **Autosizing**: The widget dynamically adjusts text size based on usage frequency, making more frequently used items more prominent.
