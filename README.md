@@ -39,6 +39,11 @@ ZenLendar displays your calendar events in a clean, concise format. It integrate
 ### ZenTheme.js
 ZenTheme lets you manage themes for ZenTrate and ZenLendar.
 
+| ![noir](https://github.com/user-attachments/assets/1cff7f61-64b7-403b-897e-dd5c295c7afb) | ![zen](https://github.com/user-attachments/assets/802e85e7-be47-4a6b-ace3-0f6ea2344876) | ![cartoon](https://github.com/user-attachments/assets/feb6bbc1-5ff4-4167-8061-4c3613139b3c) |
+| --- | ---- | ---- |
+| ![pastel](https://github.com/user-attachments/assets/520a928e-67d6-42fc-84be-4f43d0478d93) | ![terminal](https://github.com/user-attachments/assets/26a06a8a-502c-49b3-8d4c-4a1238518192) | ![elegant](https://github.com/user-attachments/assets/6a64c479-be47-41da-b418-79d48e8e6017) |
+
+
 - **Select an Existing Theme**: Choose from your saved themes to apply it to ZenTrate or ZenLendar.
 - **Create a New Theme**: Use the configuration UI to define a new theme with your desired settings.
 
