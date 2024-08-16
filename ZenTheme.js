@@ -73,8 +73,8 @@ function loadThemes() {
 async function showThemePicker() {
   const themes = loadThemes()
   const alert = new Alert()
-  alert.title = "ZenTheme Picker"
-  alert.message = "Choose a theme or create a new one"
+  alert.title = "ZenTheme"
+  alert.message = "Pick or create a new theme"
   
   themes.forEach(theme => {
     alert.addAction(theme.name)
@@ -98,24 +98,23 @@ async function showThemePicker() {
 // Function to show configuration UI
 async function showConfigurationUI(existingTheme = DEFAULT_THEME) {
   const alert = new Alert()
-  alert.title = "ZenTheme Configuration"
-  alert.message = "Create or edit a theme"
+  alert.title = "New Theme"
   
   const fields = [
     { key: "name", label: "Theme Name" },
     { key: "author", label: "Author" },
-    { key: "bgColor", label: "Background Color (hex)" },
-    { key: "textColor", label: "Text Color (hex)" },
+    { key: "bgColor", label: "Background" },
+    { key: "textColor", label: "Text" },
     { key: "fontName", label: "Font (system/serif/monospaced/rounded)" },
-    { key: "fontWeight", label: "Font Weight" },
-    { key: "fontItalic", label: "Italic (true/false)" },
-    { key: "minFontSize", label: "Min Font Size" },
-    { key: "maxFontSize", label: "Max Font Size" }
+    { key: "fontWeight", label: "Weight" },
+    { key: "fontItalic", label: "Italic" },
+    { key: "minFontSize", label: "Min Size" },
+    { key: "maxFontSize", label: "Max Size" }
   ]
   
   fields.forEach(field => {
     const value = existingTheme[field.key].toString()
-    alert.addTextField(`${field.label} (Current: ${value})`, value)
+    alert.addTextField(`${field.label}: ${value}`, value)
   })
   
   alert.addAction("Save")

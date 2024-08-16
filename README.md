@@ -5,6 +5,7 @@ ZenTrate offers a clutter-free, elegant interface to streamline your digital lif
 - **Customizable Launcher**: ZenTrate.js is a productivity launcher that you can tailor to your needs. It supports adding apps, shortcuts, and other actions, all presented in a minimalist, distraction-free widget.
 - **Minimalist Calendar**: ZenLendar.js provides a sleek, easy-to-read calendar widget that integrates seamlessly with ZenTrate.
 - **Theme Management**: ZenTheme.js allows you to create and apply custom themes, adjusting colors, fonts, and other visual settings.
+- **Menu Editor**: ZenTweak.js is our configuration editor, offering an easy way to customize your launcher without editing JSON files directly.
 
 ## Getting Started
 
