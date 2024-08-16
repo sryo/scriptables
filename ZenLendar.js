@@ -80,36 +80,49 @@ async function getUpcomingEvents(maxEvents) {
   return events.slice(0, maxEvents) // Limit events based on maxEvents
 }
 
-// Function to format relative time
+// Function to format relative time using RelativeDateTimeFormatter
 function formatRelativeTime(event) {
   let now = new Date()
   let startDate = event.startDate
   let endDate = event.endDate
   
+  const formatter = new RelativeDateTimeFormatter()
+  formatter.useNamedDateTimeStyle()
+  
   // Check if it's an all-day event
   if (event.isAllDay) {
     // Check if the event is happening now
     if (now >= startDate && now <= endDate) {
-      return "hoy"
+      return formatter.string(startDate, now)
     }
   }
   
-  let diff = startDate.getTime() - now.getTime()
-  let days = Math.floor(diff / (1000 * 60 * 60 * 24))
-  let hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))
-  let minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60))
+  let relativeDate = formatter.string(startDate, now)
   
-  if (days > 0) {
-    return `${days}d`
-  } else if (hours > 0) {
-    return `${hours}h`
-  } else if (minutes > 0) {
-    return `${minutes}m`
-  } else {
-    return "hoy"
+  // If the relative date is empty (which can happen for very near times), use a custom format
+  if (relativeDate === "") {
+    let diff = startDate.getTime() - now.getTime()
+    let minutes = Math.floor(diff / (1000 * 60))
+    if (minutes <= 0) {
+      return formatter.string(now, now) // Should return the equivalent of "now" in the system's language
+    } else {
+      // For near future events, use the default numeric style
+      formatter.useNumericDateTimeStyle()
+      relativeDate = formatter.string(startDate, now)
+    }
   }
+  
+  // Split the string at the first number
+  const match = relativeDate.match(/\d/)
+  if (match) {
+    const index = match.index
+    relativeDate = relativeDate.slice(index)
+  }
+  
+  // Trim any leading whitespace and capitalize the first letter
+  relativeDate = relativeDate.trim()
+  return relativeDate.charAt(0).toUpperCase() + relativeDate.slice(1)
 }
-
 // Function to present an alert for configuration
 async function presentConfigAlert() {
   let alert = new Alert()

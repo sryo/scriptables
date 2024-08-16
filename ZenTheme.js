@@ -83,7 +83,7 @@ async function showThemePicker() {
   alert.addAction("New Theme")
   alert.addCancelAction("Cancel")
   
-  const response = await alert.presentAlert()
+  const response = await alert.presentSheet()
   
   if (response === themes.length) {
     return showConfigurationUI()

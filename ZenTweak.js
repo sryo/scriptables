@@ -46,7 +46,7 @@ async function showMainMenu() {
   alert.addAction("Sort Items")
   alert.addCancelAction("Cancel")
 
-  const response = await alert.presentAlert()
+  const response = await alert.presentSheet()
 
   if (response === config.items.length) {
     await addItem()
