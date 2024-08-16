@@ -61,7 +61,8 @@ function createExampleConfig() {
       { name: "Take Photo", type: "shortcut", scheme: "shortcuts://run-shortcut?name=Take%20Photo" },
       { name: "QR Scanner", type: "shortcut", scheme: "shortcuts://run-shortcut?name=QR%20Scanner" },
       { name: "Shazam", type: "shortcut", scheme: "shortcuts://run-shortcut?name=Shazam" }
-    ]
+    ],
+    sortMethod: "manual"
   }
   FileManager.iCloud().writeString(CONFIG_FILE, JSON.stringify(exampleConfig, null, 2))
   return exampleConfig
@@ -107,7 +108,7 @@ let usageStats = loadStats()
 // Set default values for widget configuration
 let showApps = true
 let showShortcuts = true
-let sortMethod = "alphabetical"
+let sortMethod = config.sortMethod || "manual"
 
 // Filter items based on showApps and showShortcuts
 const filteredItems = config.items.filter(item => 
@@ -120,8 +121,10 @@ function sortItems(items) {
     case 'usage':
       return items.sort((a, b) => (usageStats[b.name] || 0) - (usageStats[a.name] || 0))
     case 'alphabetical':
-    default:
       return items.sort((a, b) => a.name.localeCompare(b.name))
+    case 'manual':
+    default:
+      return items // Return items in their original order
   }
 }
 
@@ -164,7 +167,7 @@ function createWidget() {
     } else {
       itemStack = appColumn.addStack()
     }
-    itemStack.setPadding(4, 12, 4, 12)
+    itemStack.setPadding(8, 8, 8, 8)
     
     const usageCount = usageStats[item.name] || 0
     let itemText = itemStack.addText(item.name)

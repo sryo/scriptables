@@ -5,6 +5,7 @@
 
 // Theme configuration
 const THEME_FILE = FileManager.iCloud().documentsDirectory() + "/zentrate_theme.json"
+const CONFIG_FILE = FileManager.iCloud().documentsDirectory() + "/zenlendar_config.json"
 
 function loadThemeConfig() {
   if (FileManager.iCloud().fileExists(THEME_FILE)) {
@@ -22,7 +23,23 @@ function loadThemeConfig() {
   }
 }
 
+function loadConfig() {
+  if (FileManager.iCloud().fileExists(CONFIG_FILE)) {
+    const configString = FileManager.iCloud().readString(CONFIG_FILE)
+    return JSON.parse(configString)
+  }
+  return {
+    eventCount: 5, // Default value
+    widgetUrl: "calshow://" // Default value
+  }
+}
+
+function saveConfig(config) {
+  FileManager.iCloud().writeString(CONFIG_FILE, JSON.stringify(config))
+}
+
 const themeConfig = loadThemeConfig()
+let userConfig = loadConfig()
 
 function getFont(size, config = themeConfig) {
   const fontName = config.fontName || "System";
@@ -51,29 +68,6 @@ function getFontSize(index) {
   
   const size = maxSize * Math.exp(-decayFactor * index)
   return Math.max(size, minSize)
-}
-
-// Function to calculate the number of events that can fit
-function calculateMaxEvents() {
-  const height = 155 // Both small and medium widgets have the same height
-  const availableHeight = height - 16 // Subtracting vertical padding
-
-  let totalHeight = 0
-  let eventCount = 0
-  
-  while (totalHeight < availableHeight && eventCount < 10) { // Set a reasonable upper limit
-    const fontSize = getFontSize(eventCount)
-    
-    totalHeight += fontSize + 8 // Event height + padding
-    
-    if (totalHeight <= availableHeight) {
-      eventCount++
-    } else {
-      break
-    }
-  }
-  
-  return eventCount
 }
 
 // Function to get upcoming events
@@ -116,17 +110,46 @@ function formatRelativeTime(event) {
   }
 }
 
+// Function to present an alert for configuration
+async function presentConfigAlert() {
+  let alert = new Alert()
+  alert.title = "Configure ZenLendar"
+  alert.message = "Enter the number of events to display (1-10) and the widget URL:"
+  alert.addTextField("Number of events", userConfig.eventCount.toString())
+  alert.addTextField("Widget URL", userConfig.widgetUrl)
+  alert.addAction("Save")
+  alert.addCancelAction("Cancel")
+  
+  let response = await alert.present()
+  if (response === -1) {
+    // User cancelled
+    return null
+  }
+  
+  let count = parseInt(alert.textFieldValue(0))
+  count = isNaN(count) ? 5 : Math.min(Math.max(count, 1), 10)
+  
+  let url = alert.textFieldValue(1).trim()
+  if (!url) {
+    url = "calshow://" // Default to Calendar app if empty
+  }
+  
+  userConfig.eventCount = count
+  userConfig.widgetUrl = url
+  saveConfig(userConfig)
+  
+  return userConfig
+}
 
-// Function to create the widget
+// Create and present the widget
 async function createWidget() {
   let widget = new ListWidget()
   widget.backgroundColor = new Color("#" + themeConfig.bgColor)
 
-  // Set up the widget to open the Calendar app when tapped
-  widget.url = "calshow://"
+  // Set up the widget URL
+  widget.url = userConfig.widgetUrl
 
-  const maxEvents = calculateMaxEvents()
-  let events = await getUpcomingEvents(maxEvents)
+  let events = await getUpcomingEvents(userConfig.eventCount)
   
   events.forEach((event, index) => {
     let eventStack = widget.addStack()
@@ -136,54 +159,32 @@ async function createWidget() {
     
     let titleText = eventStack.addText(event.title)
     titleText.textColor = new Color("#" + themeConfig.textColor)
-    titleText.font = getFont(fontSize)
+    titleText.font = getFont(fontSize * .75)
     titleText.lineLimit = 1
     
     eventStack.addSpacer()
     
     let timeText = eventStack.addText(formatRelativeTime(event))
     timeText.textColor = new Color("#" + themeConfig.textColor)
-    timeText.font = getFont(fontSize - 2)
+    timeText.font = getFont(fontSize * .75)
     
     if (index < events.length - 1) {
-      widget.addSpacer(8) // Space between events
+      widget.addSpacer(12) // Space between events
     }
   })
 
-  widget.setPadding(8, 12, 8, 12)
+  widget.setPadding(0, 8, 0, 8)
   return widget
 }
 
-// Create and present the widget
+// Run function
 async function run() {
-  let widget = await createWidget()
-  if (config.runsInWidget) {
+  if (config.runsInApp) {
+    const newConfig = await presentConfigAlert()
+  } else if (config.runsInWidget) {
+    let widget = await createWidget()
     Script.setWidget(widget)
-  } else {
-    if (config.runsInApp) {
-      const options = ["Small", "Medium"]
-      let selectedIndex = await presentAlert("Choose Widget Size", options)
-      let sizes = [["small"], ["medium"]]
-      config.widgetFamily = sizes[selectedIndex][0]
-    }
-    if (config.widgetFamily === "small") {
-      await widget.presentSmall()
-    } else {
-      await widget.presentMedium()
-    }
   }
-}
-
-async function presentAlert(prompt, items) {
-  let alert = new Alert()
-  alert.message = prompt
-  
-  for (const item of items) {
-    alert.addAction(item)
-  }
-  
-  let response = await alert.presentAlert()
-  return response
 }
 
 await run()

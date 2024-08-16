@@ -12,12 +12,23 @@ function loadConfig() {
     const configString = fm.readString(CONFIG_FILE)
     return JSON.parse(configString)
   }
-  return { items: [] }
+  return { items: [], sortMethod: "manual" }
 }
 
 // Function to save configuration
 function saveConfig(config) {
   fm.writeString(CONFIG_FILE, JSON.stringify(config, null, 2))
+}
+
+// Function to get the position within the specific list
+function getPositionInList(items, index) {
+  const item = items[index]
+  return items.filter((i, idx) => i.type === item.type && idx <= index).length
+}
+
+// Function to get the number of items in a specific list
+function getListLength(items, type) {
+  return items.filter(item => item.type === type).length
 }
 
 // Function to show the main menu
@@ -32,12 +43,15 @@ async function showMainMenu() {
   })
 
   alert.addAction("Add New Item")
+  alert.addAction("Sort Items")
   alert.addCancelAction("Cancel")
 
   const response = await alert.presentAlert()
 
   if (response === config.items.length) {
     await addItem()
+  } else if (response === config.items.length + 1) {
+    await showSortMenu()
   } else if (response !== -1) {
     await editItem(response)
   }
@@ -50,13 +64,15 @@ async function editItem(index) {
   const alert = new Alert()
   alert.title = "Edit Item"
   
+  const currentPosition = getPositionInList(config.items, index)
+  const listLength = getListLength(config.items, item.type)
+  
   alert.addTextField("Name", item.name)
-  alert.addTextField("List (app/shortcut)", item.type)
   alert.addTextField("Scheme URL", item.scheme)
+  alert.addTextField(`Position in ${item.type} list (1-${listLength})`, currentPosition.toString())
   
   alert.addAction("Save")
-  alert.addAction("Move Up")
-  alert.addAction("Move Down")
+  alert.addAction(item.type === 'app' ? "Move to Shortcuts" : "Move to Apps")
   alert.addDestructiveAction("Delete")
   alert.addCancelAction("Cancel")
 
@@ -65,27 +81,24 @@ async function editItem(index) {
   switch (response) {
     case 0: // Save
       item.name = alert.textFieldValue(0)
-      item.type = alert.textFieldValue(1)
-      item.scheme = alert.textFieldValue(2)
+      item.scheme = alert.textFieldValue(1)
+      const newPosition = parseInt(alert.textFieldValue(2)) - 1
+      if (!isNaN(newPosition) && newPosition >= 0 && newPosition < listLength) {
+        const sameTypeItems = config.items.filter(i => i.type === item.type)
+        sameTypeItems.splice(currentPosition - 1, 1)
+        sameTypeItems.splice(newPosition, 0, item)
+        config.items = [
+          ...config.items.filter(i => i.type !== item.type),
+          ...sameTypeItems
+        ]
+      }
       saveConfig(config)
       break
-    case 1: // Move Up
-      if (index > 0) {
-        const temp = config.items[index - 1]
-        config.items[index - 1] = item
-        config.items[index] = temp
-        saveConfig(config)
-      }
+    case 1: // Move to Apps/Shortcuts
+      item.type = item.type === 'app' ? 'shortcut' : 'app'
+      saveConfig(config)
       break
-    case 2: // Move Down
-      if (index < config.items.length - 1) {
-        const temp = config.items[index + 1]
-        config.items[index + 1] = item
-        config.items[index] = temp
-        saveConfig(config)
-      }
-      break
-    case 3: // Delete
+    case 2: // Delete
       config.items.splice(index, 1)
       saveConfig(config)
       break
@@ -94,27 +107,83 @@ async function editItem(index) {
 
 // Function to add a new item
 async function addItem() {
+  const config = loadConfig()
   const alert = new Alert()
   alert.title = "Add New Item"
   
   alert.addTextField("Name")
-  alert.addTextField("Type (app/shortcut)")
   alert.addTextField("Scheme URL")
   
-  alert.addAction("Save")
+  alert.addAction("Add as App")
+  alert.addAction("Add as Shortcut")
   alert.addCancelAction("Cancel")
 
   const response = await alert.presentAlert()
 
-  if (response === 0) {
-    const config = loadConfig()
-    config.items.push({
+  if (response === 0 || response === 1) {
+    const newItem = {
       name: alert.textFieldValue(0),
-      type: alert.textFieldValue(1),
-      scheme: alert.textFieldValue(2)
-    })
-    saveConfig(config)
+      scheme: alert.textFieldValue(1),
+      type: response === 0 ? 'app' : 'shortcut'
+    }
+    
+    const listLength = getListLength(config.items, newItem.type)
+    
+    const positionAlert = new Alert()
+    positionAlert.title = `Position in ${newItem.type} list`
+    positionAlert.message = `Enter a position (1-${listLength + 1})`
+    positionAlert.addTextField("Position", (listLength + 1).toString())
+    positionAlert.addAction("Add")
+    positionAlert.addCancelAction("Cancel")
+    
+    const positionResponse = await positionAlert.presentAlert()
+    
+    if (positionResponse === 0) {
+      const position = parseInt(positionAlert.textFieldValue(0)) - 1
+      const sameTypeItems = config.items.filter(i => i.type === newItem.type)
+      if (!isNaN(position) && position >= 0 && position <= sameTypeItems.length) {
+        sameTypeItems.splice(position, 0, newItem)
+        config.items = [
+          ...config.items.filter(i => i.type !== newItem.type),
+          ...sameTypeItems
+        ]
+      } else {
+        config.items.push(newItem)
+      }
+      saveConfig(config)
+    }
   }
+}
+
+// Function to show the sort menu
+async function showSortMenu() {
+  const config = loadConfig()
+  const alert = new Alert()
+  alert.title = "Sort Items"
+  alert.message = "Choose a sorting method"
+
+  alert.addAction("Manual")
+  alert.addAction("Alphabetical")
+  alert.addAction("Usage")
+  alert.addCancelAction("Cancel")
+
+  const response = await alert.presentAlert()
+
+  switch (response) {
+    case 0:
+      config.sortMethod = "manual"
+      break
+    case 1:
+      config.sortMethod = "alphabetical"
+      break
+    case 2:
+      config.sortMethod = "usage"
+      break
+    default:
+      return
+  }
+
+  saveConfig(config)
 }
 
 // Main function to run when the script is executed
