@@ -4,8 +4,8 @@
   "bgColor": "FFFFFF",
   "textColor": "333333",
   "fontName": "system",
-  "fontWeight": "regular",
+  "fontWeight": "medium",
   "fontItalic": false,
-  "minFontSize": 18,
-  "maxFontSize": 18
+  "minFontSize": 20,
+  "maxFontSize": 20
 }

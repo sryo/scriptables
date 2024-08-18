@@ -167,7 +167,7 @@ function createWidget() {
     } else {
       itemStack = appColumn.addStack()
     }
-    itemStack.setPadding(8, 8, 8, 8)
+    itemStack.setPadding(4, 8, 4, 8)
     
     const usageCount = usageStats[item.name] || 0
     let itemText = itemStack.addText(item.name)

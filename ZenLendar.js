@@ -93,7 +93,8 @@ function formatRelativeTime(event) {
   if (event.isAllDay) {
     // Check if the event is happening now
     if (now >= startDate && now <= endDate) {
-      return formatter.string(startDate, now)
+      // Use the formatter to get a representation of "now"
+      return formatter.string(now, now)
     }
   }
   
@@ -123,6 +124,7 @@ function formatRelativeTime(event) {
   relativeDate = relativeDate.trim()
   return relativeDate.charAt(0).toUpperCase() + relativeDate.slice(1)
 }
+
 // Function to present an alert for configuration
 async function presentConfigAlert() {
   let alert = new Alert()

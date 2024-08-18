@@ -4,7 +4,7 @@
   "bgColor": "000000",
   "textColor": "FFFFFF",
   "fontName": "system",
-  "fontWeight": "semibold",
+  "fontWeight": "bold",
   "fontItalic": false,
   "minFontSize": 10,
   "maxFontSize": 30

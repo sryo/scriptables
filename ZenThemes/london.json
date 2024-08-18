@@ -1,0 +1,11 @@
+{
+  "name": "London",
+  "author": "sryo",
+  "bgColor": "E95420",
+  "textColor": "FFFFFF",
+  "fontName": "Verdana",
+  "fontWeight": "bold",
+  "fontItalic": false,
+  "minFontSize": 14,
+  "maxFontSize": 24
+}

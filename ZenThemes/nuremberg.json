@@ -1,0 +1,11 @@
+{
+  "name": "Nuremberg",
+  "author": "sryo",
+  "bgColor": "73BA25",
+  "textColor": "173F4F",
+  "fontName": "HelveticaNeue-Regular",
+  "fontWeight": "thin",
+  "fontItalic": false,
+  "minFontSize": 20,
+  "maxFontSize": 32
+}

@@ -1,0 +1,11 @@
+{
+  "name": "Mountain View",
+  "author": "sryo",
+  "bgColor": "FF00FF",
+  "textColor": "FFFFFF",
+  "fontName": "GillSans-SemiBold",
+  "fontWeight": "semibold",
+  "fontItalic": false,
+  "minFontSize": 16,
+  "maxFontSize": 28
+}

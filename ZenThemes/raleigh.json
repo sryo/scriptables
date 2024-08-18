@@ -1,0 +1,11 @@
+{
+  "name": "Raleigh",
+  "author": "sryo",
+  "bgColor": "EE0000",
+  "textColor": "FFFFFF",
+  "fontName": "AvenirNext-Bold",
+  "fontWeight": "bold",
+  "fontItalic": false,
+  "minFontSize": 16,
+  "maxFontSize": 24
+}

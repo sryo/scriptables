@@ -1,0 +1,11 @@
+{
+  "name": "Menlo Park",
+  "author": "sryo",
+  "bgColor": "FFD300",
+  "textColor": "000000",
+  "fontName": "Georgia",
+  "fontWeight": "bold",
+  "fontItalic": false,
+  "minFontSize": 16,
+  "maxFontSize": 24
+}

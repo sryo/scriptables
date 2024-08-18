@@ -1,0 +1,11 @@
+{
+  "name": "Armonk",
+  "author": "sryo",
+  "bgColor": "0043CE",
+  "textColor": "FFFFFF",
+  "fontName": "DINAlternate-Bold",
+  "fontWeight": "bold",
+  "fontItalic": false,
+  "minFontSize": 14,
+  "maxFontSize": 22
+}
