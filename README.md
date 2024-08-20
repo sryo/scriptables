@@ -1,4 +1,7 @@
-ZenTrate offers a clutter-free, elegant interface to streamline your digital life and enhance productivity.
+![zentrate](https://github.com/user-attachments/assets/801efd6f-4ebc-49ec-b093-d9aa396e932b)
+
+**ZenTrate** offers a clutter-free, elegant interface to streamline your digit
+al life and enhance productivity.
 
 ## Features
 
