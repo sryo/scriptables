@@ -136,9 +136,22 @@ async function showConfigurationUI() {
     newTheme.minFontSize = parseInt(newTheme.minFontSize)
     newTheme.maxFontSize = parseInt(newTheme.maxFontSize)
     
+    // Generate filename for the theme
     const filename = `${newTheme.name.toLowerCase().replace(/\s+/g, '-')}.json`
-    saveTheme(newTheme, filename)
+    
+    // Save as current theme
     saveThemeConfig(newTheme)
+    
+    // Save or update theme in ZenThemes folder
+    saveTheme(newTheme, filename)
+    
+    // Provide feedback to the user
+    const successAlert = new Alert()
+    successAlert.title = "Theme Saved"
+    successAlert.message = `Your theme "${newTheme.name}" has been saved and is available in the ZenThemes folder as "${filename}".`
+    successAlert.addAction("OK")
+    await successAlert.present()
+    
     return true  // Configuration updated
   }
   
