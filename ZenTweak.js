@@ -72,6 +72,7 @@ async function editItem(index) {
   alert.addTextField(`Position in ${item.type} list (1-${listLength})`, currentPosition.toString())
   
   alert.addAction("Save")
+  alert.addAction("Set Time Constraints")
   alert.addAction(item.type === 'app' ? "Move to Shortcuts" : "Move to Apps")
   alert.addDestructiveAction("Delete")
   alert.addCancelAction("Cancel")
@@ -94,14 +95,48 @@ async function editItem(index) {
       }
       saveConfig(config)
       break
-    case 1: // Move to Apps/Shortcuts
+    case 1: // Set Time Constraints
+      await setTimeConstraints(item)
+      saveConfig(config)
+      break
+    case 2: // Move to Apps/Shortcuts
       item.type = item.type === 'app' ? 'shortcut' : 'app'
       saveConfig(config)
       break
-    case 2: // Delete
+    case 3: // Delete
       config.items.splice(index, 1)
       saveConfig(config)
       break
+  }
+}
+
+// Function to set time constraints
+async function setTimeConstraints(item) {
+  const timeAlert = new Alert()
+  timeAlert.title = "Set Time Constraints"
+  timeAlert.message = "Leave fields blank for no constraint"
+  
+  timeAlert.addTextField("Start Time (HH:MM)", item.startTime || "")
+  timeAlert.addTextField("End Time (HH:MM)", item.endTime || "")
+  timeAlert.addTextField("Start Day (0-6, 0 is Sunday)", item.startDay !== undefined ? item.startDay.toString() : "")
+  timeAlert.addTextField("End Day (0-6, 0 is Sunday)", item.endDay !== undefined ? item.endDay.toString() : "")
+  
+  timeAlert.addAction("Save")
+  timeAlert.addAction("Clear Constraints")
+  timeAlert.addCancelAction("Cancel")
+  
+  const response = await timeAlert.presentAlert()
+  
+  if (response === 0) { // Save
+    item.startTime = timeAlert.textFieldValue(0) || undefined
+    item.endTime = timeAlert.textFieldValue(1) || undefined
+    item.startDay = timeAlert.textFieldValue(2) ? parseInt(timeAlert.textFieldValue(2)) : undefined
+    item.endDay = timeAlert.textFieldValue(3) ? parseInt(timeAlert.textFieldValue(3)) : undefined
+  } else if (response === 1) { // Clear Constraints
+    delete item.startTime
+    delete item.endTime
+    delete item.startDay
+    delete item.endDay
   }
 }
 
