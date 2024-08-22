@@ -96,7 +96,8 @@ async function showThemePicker() {
 }
 
 // Function to show configuration UI
-async function showConfigurationUI(existingTheme = DEFAULT_THEME) {
+async function showConfigurationUI() {
+  const currentTheme = loadThemeConfig()
   const alert = new Alert()
   alert.title = "New Theme"
   
@@ -113,7 +114,7 @@ async function showConfigurationUI(existingTheme = DEFAULT_THEME) {
   ]
   
   fields.forEach(field => {
-    const value = existingTheme[field.key].toString()
+    const value = currentTheme[field.key].toString()
     alert.addTextField(`${field.label}: ${value}`, value)
   })
   
