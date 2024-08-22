@@ -110,9 +110,39 @@ let showApps = true
 let showShortcuts = true
 let sortMethod = config.sortMethod || "manual"
 
-// Filter items based on showApps and showShortcuts
+// Function to check if an item should be displayed based on time constraints
+function shouldDisplayItem(item) {
+  const now = new Date()
+  const currentHour = now.getHours()
+  const currentMinute = now.getMinutes()
+  const currentDay = now.getDay()
+
+  if (item.startTime) {
+    const [startHour, startMinute] = item.startTime.split(':').map(Number)
+    if (currentHour < startHour || (currentHour === startHour && currentMinute < startMinute)) {
+      return false
+    }
+  }
+
+  if (item.endTime) {
+    const [endHour, endMinute] = item.endTime.split(':').map(Number)
+    if (currentHour > endHour || (currentHour === endHour && currentMinute > endMinute)) {
+      return false
+    }
+  }
+
+  if (item.startDay !== undefined && item.endDay !== undefined) {
+    if (currentDay < item.startDay || currentDay > item.endDay) {
+      return false
+    }
+  }
+
+  return true
+}
+
+// Filter items based on showApps and showShortcuts, and time constraints
 const filteredItems = config.items.filter(item => 
-  (showApps && item.type === 'app') || (showShortcuts && item.type === 'shortcut')
+  ((showApps && item.type === 'app') || (showShortcuts && item.type === 'shortcut')) && shouldDisplayItem(item)
 )
 
 // Sorting function
@@ -178,9 +208,9 @@ function createWidget() {
     itemStack.url = `scriptable:///run?scriptName=${encodeURIComponent(Script.name())}&shortcut=${encodeURIComponent(item.name)}&originalUrl=${encodeURIComponent(item.scheme)}`
     
     if (item.type === 'shortcut') {
-      shortcutColumn.addSpacer(2)
+      shortcutColumn.addSpacer(4)
     } else {
-      appColumn.addSpacer(2)
+      appColumn.addSpacer(4)
     }
   })
   widget.setPadding(0, 0, 0, 0)
