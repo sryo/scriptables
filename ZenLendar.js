@@ -182,6 +182,7 @@ async function createWidget() {
     let timeText = eventStack.addText(formatRelativeTime(event))
     timeText.textColor = new Color("#" + themeConfig.textColor)
     timeText.font = getFont(fontSize * .75)
+    timeText.lineLimit = 1
     
     if (index < events.length - 1) {
       widget.addSpacer(12) // Space between events
