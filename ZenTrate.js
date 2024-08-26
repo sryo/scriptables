@@ -47,20 +47,20 @@ function getFont(size, config = themeConfig) {
 const CONFIG_FILE = FileManager.iCloud().documentsDirectory() + "/zentrate_config.json"
 const STATS_FILE = FileManager.iCloud().documentsDirectory() + "/zentrate_stats.json"
 
-// Function to create example configuration
+// Create example configuration
 function createExampleConfig() {
   const exampleConfig = {
     items: [
-      { name: "Settings", type: "app", scheme: "App-prefs://" },
-      { name: "Weather", type: "app", scheme: "weather://" },
-      { name: "Messages", type: "app", scheme: "messages://" },
-      { name: "Calendar", type: "app", scheme: "calshow://" },
-      { name: "Phone", type: "app", scheme: "tel://" },
-      { name: "Maps", type: "app", scheme: "maps://" },
-      { name: "Create Reminder", type: "shortcut", scheme: "shortcuts://run-shortcut?name=Create%20Reminder" },
-      { name: "Take Photo", type: "shortcut", scheme: "shortcuts://run-shortcut?name=Take%20Photo" },
-      { name: "QR Scanner", type: "shortcut", scheme: "shortcuts://run-shortcut?name=QR%20Scanner" },
-      { name: "Shazam", type: "shortcut", scheme: "shortcuts://run-shortcut?name=Shazam" }
+      { name: "Settings", column: "left", scheme: "App-prefs://" },
+      { name: "Weather", column: "left", scheme: "weather://" },
+      { name: "Messages", column: "left", scheme: "messages://" },
+      { name: "Calendar", column: "left", scheme: "calshow://" },
+      { name: "Phone", column: "left", scheme: "tel://" },
+      { name: "Maps", column: "left", scheme: "maps://" },
+      { name: "Create Reminder", column: "right", scheme: "shortcuts://run-shortcut?name=Create%20Reminder" },
+      { name: "Take Photo", column: "right", scheme: "shortcuts://run-shortcut?name=Take%20Photo" },
+      { name: "QR Scanner", column: "right", scheme: "shortcuts://run-shortcut?name=QR%20Scanner" },
+      { name: "Shazam", column: "right", scheme: "shortcuts://run-shortcut?name=Shazam" }
     ],
     sortMethod: "manual"
   }
@@ -68,7 +68,7 @@ function createExampleConfig() {
   return exampleConfig
 }
 
-// Function to load configuration
+// Load configuration
 function loadConfig() {
   if (FileManager.iCloud().fileExists(CONFIG_FILE)) {
     const configString = FileManager.iCloud().readString(CONFIG_FILE)
@@ -77,7 +77,7 @@ function loadConfig() {
   return createExampleConfig()
 }
 
-// Function to load usage statistics
+// Load usage statistics
 function loadStats() {
   if (FileManager.iCloud().fileExists(STATS_FILE)) {
     const statsString = FileManager.iCloud().readString(STATS_FILE)
@@ -86,12 +86,12 @@ function loadStats() {
   return {}
 }
 
-// Function to save usage statistics
+// Save usage statistics
 function saveStats(stats) {
   FileManager.iCloud().writeString(STATS_FILE, JSON.stringify(stats))
 }
 
-// Function to update usage count
+// Update usage count
 function updateUsageCount(name) {
   let stats = loadStats()
   if (!stats[name]) {
@@ -106,11 +106,12 @@ let config = loadConfig()
 let usageStats = loadStats()
 
 // Set default values for widget configuration
-let showApps = true
-let showShortcuts = true
+let showLeft = true
+let showCenter = true
+let showRight = true
 let sortMethod = config.sortMethod || "manual"
 
-// Function to check if an item should be displayed based on time constraints
+// Check if an item should be displayed based on time constraints
 function shouldDisplayItem(item) {
   const now = new Date()
   const currentHour = now.getHours()
@@ -140,12 +141,14 @@ function shouldDisplayItem(item) {
   return true
 }
 
-// Filter items based on showApps and showShortcuts, and time constraints
+// Filter items based on showLeft, showCenter, showRight, and time constraints
 const filteredItems = config.items.filter(item => 
-  ((showApps && item.type === 'app') || (showShortcuts && item.type === 'shortcut')) && shouldDisplayItem(item)
+  ((showLeft && item.column === 'left') || 
+   (showCenter && item.column === 'center') || 
+   (showRight && item.column === 'right')) && 
+  shouldDisplayItem(item)
 )
 
-// Sorting function
 function sortItems(items) {
   switch(sortMethod) {
     case 'usage':
@@ -160,7 +163,7 @@ function sortItems(items) {
 
 const sortedItems = sortItems(filteredItems)
 
-// Function to calculate font size based on usage count
+// Calculate font size based on usage count
 function getFontSize(usageCount) {
   const minSize = themeConfig.minFontSize
   const maxSize = themeConfig.maxFontSize
@@ -169,55 +172,81 @@ function getFontSize(usageCount) {
   return Math.round(minSize + (usageCount / maxUsage) * range)
 }
 
-// Function to create the widget
+// Add an item to a row
+function addItemToRow(rowStack, item, position) {
+  let itemStack = rowStack.addStack()
+  itemStack.layoutHorizontally()
+  itemStack.bottomAlignContent()  // This ensures bottom alignment
+
+  let textStack = itemStack.addStack()
+  textStack.bottomAlignContent()  // This ensures bottom alignment for the text
+  let itemText = textStack.addText(item.name)
+
+  const usageCount = usageStats[item.name] || 0
+  itemText.font = getFont(getFontSize(usageCount))
+  itemText.textColor = new Color("#" + themeConfig.textColor)
+  itemText.minimumScaleFactor = 0.5
+  itemText.lineLimit = 1
+  itemStack.url = `scriptable:///run?scriptName=${encodeURIComponent(Script.name())}&shortcut=${encodeURIComponent(item.name)}&originalUrl=${encodeURIComponent(item.scheme)}`
+}
+
 function createWidget() {
   let widget = new ListWidget()
   widget.backgroundColor = new Color("#" + themeConfig.bgColor)
 
-  // Create a stack layout for two columns
-  let rowStack = widget.addStack()
-  rowStack.layoutHorizontally()
+  // Create a single vertical stack for all items
+  let mainStack = widget.addStack()
+  mainStack.layoutVertically()
 
-  // Left column for apps
-  let appsStack = rowStack.addStack()
-  let appColumn = appsStack.addStack()
-  appColumn.layoutVertically()
+  // Group items by column
+  let leftItems = sortedItems.filter(item => item.column === 'left')
+  let centerItems = sortedItems.filter(item => item.column === 'center')
+  let rightItems = sortedItems.filter(item => item.column === 'right')
 
-  rowStack.addSpacer()
+  // Determine the maximum number of rows
+  let maxRows = Math.max(leftItems.length, centerItems.length, rightItems.length)
 
-  // Right column for shortcuts
-  let shortcutsStack = rowStack.addStack()
-  let shortcutColumn = shortcutsStack.addStack()
-  shortcutColumn.layoutVertically()
+  // Create rows
+  for (let i = 0; i < maxRows; i++) {
+    let rowStack = mainStack.addStack()
+    rowStack.layoutHorizontally()
+    rowStack.bottomAlignContent()  // This ensures bottom alignment for the entire row
 
-  sortedItems.forEach(item => {
-    let itemStack
-    if (item.type === 'shortcut') {
-      itemStack = shortcutColumn.addStack()
+    // Left item
+    if (i < leftItems.length) {
+      addItemToRow(rowStack, leftItems[i], 'left')
     } else {
-      itemStack = appColumn.addStack()
+      rowStack.addSpacer()
     }
-    itemStack.setPadding(4, 8, 4, 8)
-    
-    const usageCount = usageStats[item.name] || 0
-    let itemText = itemStack.addText(item.name)
-    itemText.font = getFont(getFontSize(usageCount))
-    itemText.textColor = new Color("#" + themeConfig.textColor)
-    itemText.minimumScaleFactor = 0.5
-    itemText.lineLimit = 1
-    itemStack.url = `scriptable:///run?scriptName=${encodeURIComponent(Script.name())}&shortcut=${encodeURIComponent(item.name)}&originalUrl=${encodeURIComponent(item.scheme)}`
-    
-    if (item.type === 'shortcut') {
-      shortcutColumn.addSpacer(4)
+
+    rowStack.addSpacer()
+
+    // Center item
+    if (i < centerItems.length) {
+      addItemToRow(rowStack, centerItems[i], 'center')
     } else {
-      appColumn.addSpacer(4)
+      rowStack.addSpacer()
     }
-  })
-  widget.setPadding(0, 0, 0, 0)
+
+    rowStack.addSpacer()
+
+    // Right item
+    if (i < rightItems.length) {
+      addItemToRow(rowStack, rightItems[i], 'right')
+    } else {
+      rowStack.addSpacer()
+    }
+
+    // Add vertical spacing between rows
+    if (i < maxRows - 1) {
+      mainStack.addSpacer(12) // Adjust this value to change vertical spacing
+    }
+  }
+
+  widget.setPadding(0, 8, 0, 8)
   return widget
 }
 
-// Handle actions
 if (args.queryParameters && args.queryParameters.shortcut) {
   const shortcutName = decodeURIComponent(args.queryParameters.shortcut)
   const originalUrl = decodeURIComponent(args.queryParameters.originalUrl)

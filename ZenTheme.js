@@ -28,7 +28,7 @@ function ensureThemesFolder() {
   }
 }
 
-// Function to load theme configuration
+// Load theme configuration
 function loadThemeConfig() {
   if (fm.fileExists(THEME_FILE)) {
     const configString = fm.readString(THEME_FILE)
@@ -37,19 +37,19 @@ function loadThemeConfig() {
   return DEFAULT_THEME
 }
 
-// Function to save theme configuration
+// Save theme configuration
 function saveThemeConfig(config) {
   fm.writeString(THEME_FILE, JSON.stringify(config, null, 2))
 }
 
-// Function to save a theme to the themes folder
+// Save a theme to the themes folder
 function saveTheme(theme, filename) {
   const themePath = fm.joinPath(THEMES_FOLDER, filename)
   const themeString = JSON.stringify(theme, null, 2)
   fm.writeString(themePath, themeString)
 }
 
-// Function to load themes from the themes folder
+// Load themes from the themes folder
 function loadThemes() {
   const themes = []
   const files = fm.listContents(THEMES_FOLDER)
@@ -69,7 +69,7 @@ function loadThemes() {
   return themes
 }
 
-// Function to show theme picker UI
+// Show theme picker UI
 async function showThemePicker() {
   const themes = loadThemes()
   const alert = new Alert()
@@ -95,7 +95,7 @@ async function showThemePicker() {
   return false
 }
 
-// Function to show configuration UI
+// Show configuration UI
 async function showConfigurationUI() {
   const currentTheme = loadThemeConfig()
   const alert = new Alert()
@@ -158,14 +158,12 @@ async function showConfigurationUI() {
   return false  // Configuration not updated
 }
 
-// Main function to run when the script is executed
 async function run() {
   ensureThemesFolder()
   await showThemePicker()
   Script.complete()
 }
 
-// Only run the configuration UI when this script is executed directly
 if (config.runsInApp) {
   await run()
 }

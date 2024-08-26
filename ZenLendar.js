@@ -60,7 +60,7 @@ function getFont(size, config = themeConfig) {
   return font;
 }
 
-// Function to calculate font size based on event index
+// Calculate font size based on event index
 function getFontSize(index) {
   const maxSize = themeConfig.maxFontSize
   const minSize = themeConfig.minFontSize
@@ -70,7 +70,7 @@ function getFontSize(index) {
   return Math.max(size, minSize)
 }
 
-// Function to get upcoming events
+// Get upcoming events
 async function getUpcomingEvents(maxEvents) {
   let calendars = await Calendar.forEvents()
   let now = new Date()
@@ -80,7 +80,7 @@ async function getUpcomingEvents(maxEvents) {
   return events.slice(0, maxEvents) // Limit events based on maxEvents
 }
 
-// Function to format relative time using RelativeDateTimeFormatter
+// Format relative time
 function formatRelativeTime(event) {
   let now = new Date()
   let startDate = event.startDate
@@ -125,7 +125,7 @@ function formatRelativeTime(event) {
   return relativeDate.charAt(0).toUpperCase() + relativeDate.slice(1)
 }
 
-// Function to present an alert for configuration
+// Present an alert for configuration
 async function presentConfigAlert() {
   let alert = new Alert()
   alert.title = "Configure ZenLendar"
@@ -193,7 +193,6 @@ async function createWidget() {
   return widget
 }
 
-// Run function
 async function run() {
   if (config.runsInApp) {
     const newConfig = await presentConfigAlert()
