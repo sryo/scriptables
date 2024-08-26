@@ -31,6 +31,35 @@ function getListLength(items, type) {
   return items.filter(item => item.type === type).length
 }
 
+// Function to validate and format time
+function validateAndFormatTime(time) {
+  if (!time) return undefined;
+  
+  // Support short time format
+  if (/^\d{1,2}$/.test(time)) {
+    time = time.padStart(2, '0') + ':00';
+  }
+  
+  // Validate time format
+  const timeRegex = /^([01]\d|2[0-3]):?([0-5]\d)$/;
+  if (!timeRegex.test(time)) {
+    throw new Error(`Invalid time format: ${time}. Please use HH:MM or just HH.`);
+  }
+  
+  // Ensure consistent format (HH:MM)
+  return time.length === 5 ? time : `${time}:00`;
+}
+
+// Function to validate day
+function validateDay(day) {
+  if (day === '') return undefined;
+  const dayNum = parseInt(day);
+  if (isNaN(dayNum) || dayNum < 0 || dayNum > 6) {
+    throw new Error(`Invalid day: ${day}. Please use a number between 0 and 6.`);
+  }
+  return dayNum;
+}
+
 // Function to show the main menu
 async function showMainMenu() {
   const config = loadConfig()
@@ -114,7 +143,7 @@ async function editItem(index) {
 async function setTimeConstraints(item) {
   const timeAlert = new Alert()
   timeAlert.title = "Set Time Constraints"
-  timeAlert.message = "Leave fields blank for no constraint"
+  timeAlert.message = "Leave fields blank for no constraint."
   
   timeAlert.addTextField("Start Time (HH:MM)", item.startTime || "")
   timeAlert.addTextField("End Time (HH:MM)", item.endTime || "")
@@ -128,15 +157,24 @@ async function setTimeConstraints(item) {
   const response = await timeAlert.presentAlert()
   
   if (response === 0) { // Save
-    item.startTime = timeAlert.textFieldValue(0) || undefined
-    item.endTime = timeAlert.textFieldValue(1) || undefined
-    item.startDay = timeAlert.textFieldValue(2) ? parseInt(timeAlert.textFieldValue(2)) : undefined
-    item.endDay = timeAlert.textFieldValue(3) ? parseInt(timeAlert.textFieldValue(3)) : undefined
+    try {
+      item.startTime = validateAndFormatTime(timeAlert.textFieldValue(0));
+      item.endTime = validateAndFormatTime(timeAlert.textFieldValue(1));
+      item.startDay = validateDay(timeAlert.textFieldValue(2));
+      item.endDay = validateDay(timeAlert.textFieldValue(3));
+    } catch (error) {
+      const errorAlert = new Alert();
+      errorAlert.title = "Validation Error";
+      errorAlert.message = error.message;
+      errorAlert.addAction("OK");
+      await errorAlert.presentAlert();
+      return await setTimeConstraints(item); // Recursive call to try again
+    }
   } else if (response === 1) { // Clear Constraints
-    delete item.startTime
-    delete item.endTime
-    delete item.startDay
-    delete item.endDay
+    delete item.startTime;
+    delete item.endTime;
+    delete item.startDay;
+    delete item.endDay;
   }
 }
 
