@@ -175,19 +175,34 @@ function getFontSize(usageCount) {
 // Add an item to a row
 function addItemToRow(rowStack, item, position) {
   let itemStack = rowStack.addStack()
-  itemStack.layoutHorizontally()
-  itemStack.bottomAlignContent()  // This ensures bottom alignment
-
-  let textStack = itemStack.addStack()
-  textStack.bottomAlignContent()  // This ensures bottom alignment for the text
-  let itemText = textStack.addText(item.name)
 
   const usageCount = usageStats[item.name] || 0
-  itemText.font = getFont(getFontSize(usageCount))
+  const fontSize = getFontSize(usageCount)
+  const padding = calculatePadding(fontSize)
+
+  let textStack = itemStack.addStack()
+  textStack.setPadding(padding.top, padding.left, padding.bottom, padding.right)
+  
+  let itemText = textStack.addText(item.name)
+  itemText.font = getFont(fontSize)
   itemText.textColor = new Color("#" + themeConfig.textColor)
   itemText.minimumScaleFactor = 0.5
   itemText.lineLimit = 1
+
   itemStack.url = `scriptable:///run?scriptName=${encodeURIComponent(Script.name())}&shortcut=${encodeURIComponent(item.name)}&originalUrl=${encodeURIComponent(item.scheme)}`
+}
+
+function calculatePadding(fontSize) {
+  const maxFontSize = themeConfig.maxFontSize
+  const basePadding = 0 // Adjust this value as needed
+  const extraPadding = Math.max(0, (maxFontSize - fontSize) / 2)
+  
+  return {
+    top: basePadding + extraPadding,
+    bottom: basePadding + extraPadding,
+    left: basePadding,
+    right: basePadding
+  }
 }
 
 function createWidget() {
@@ -210,7 +225,7 @@ function createWidget() {
   for (let i = 0; i < maxRows; i++) {
     let rowStack = mainStack.addStack()
     rowStack.layoutHorizontally()
-    rowStack.bottomAlignContent()  // This ensures bottom alignment for the entire row
+    rowStack.bottomAlignContent()
 
     // Left item
     if (i < leftItems.length) {
@@ -239,7 +254,7 @@ function createWidget() {
 
     // Add vertical spacing between rows
     if (i < maxRows - 1) {
-      mainStack.addSpacer(12) // Adjust this value to change vertical spacing
+      mainStack.addSpacer(2) // Adjust this value to change vertical spacing
     }
   }
 
