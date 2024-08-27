@@ -5,18 +5,16 @@
 
 const fm = FileManager.iCloud()
 const CONFIG_FILE = fm.documentsDirectory() + "/zentrate_config.json"
+const THEME_FILE = fm.documentsDirectory() + "/zentrate_theme.json"
 
 // Load configuration
 function loadConfig() {
   if (fm.fileExists(CONFIG_FILE)) {
     const configString = fm.readString(CONFIG_FILE)
     let config = JSON.parse(configString)
-    
-    // Validate and filter out invalid items
     config.items = config.items.filter(item => 
       item && typeof item === 'object' && item.name && item.scheme && item.column
     )
-    
     return config
   }
   return { items: [], sortMethod: "manual" }
@@ -27,15 +25,41 @@ function saveConfig(config) {
   fm.writeString(CONFIG_FILE, JSON.stringify(config, null, 2))
 }
 
-// Get items grouped by column
-function getItemsByColumn(items) {
-  return items.reduce((acc, item) => {
-    if (!acc[item.column]) {
-      acc[item.column] = [];
-    }
-    acc[item.column].push(item);
-    return acc;
-  }, {left: [], center: [], right: []});
+// Load theme configuration
+function loadThemeConfig() {
+  if (fm.fileExists(THEME_FILE)) {
+    const configString = fm.readString(THEME_FILE)
+    return JSON.parse(configString)
+  }
+  return {
+    bgColor: "000000",
+    textColor: "FFFFFF",
+    fontName: "system",
+    fontWeight: "bold",
+    fontItalic: false,
+    minFontSize: 10,
+    maxFontSize: 30
+  }
+}
+
+// Get font based on theme configuration
+function getFont(size, config = loadThemeConfig()) {
+  const fontName = config.fontName || "System";
+  const weight = config.fontWeight || "regular";
+  const isItalic = config.fontItalic || false;
+
+  let font;
+  if (fontName.toLowerCase() === "system") {
+    font = Font[weight + "SystemFont"](size);
+  } else {
+    font = new Font(fontName, size);
+  }
+
+  if (isItalic) {
+    font = Font.italicSystemFont(size);
+  }
+
+  return font;
 }
 
 // Validate and format time
@@ -67,145 +91,87 @@ function validateDay(day) {
   return dayNum;
 }
 
-// Show the main menu
-async function showMainMenu() {
-  while (true) {
-    let config = loadConfig()
-    let itemsByColumn = getItemsByColumn(config.items)
+// WYSIWYG editor
+async function createEditableWidget(config) {
+  let widget = new ListWidget()
+  const themeConfig = loadThemeConfig()
+  widget.backgroundColor = new Color("#" + themeConfig.bgColor)
+
+  let mainStack = widget.addStack()
+  mainStack.layoutHorizontally()
+
+  const columns = ['left', 'center', 'right']
+  
+  for (let column of columns) {
+    let columnStack = mainStack.addStack()
+    columnStack.layoutVertically()
     
-    const columnAlert = new Alert()
-    columnAlert.title = "ZenTweak"
-    columnAlert.message = "Select a column or action"
-
-    const columns = ['left', 'center', 'right']
-    let nonEmptyColumns = []
-    columns.forEach(column => {
-      if (itemsByColumn[column].length > 0) {
-        columnAlert.addAction(`${column.charAt(0).toUpperCase() + column.slice(1)} Column (${itemsByColumn[column].length})`)
-        nonEmptyColumns.push(column)
-      }
-    })
-
-    const addNewItemIndex = nonEmptyColumns.length
-    const sortItemsIndex = addNewItemIndex + 1
-    const exitIndex = sortItemsIndex + 1
-
-    columnAlert.addAction("Add New Item")
-    columnAlert.addAction("Sort Items")
-    columnAlert.addCancelAction("Exit")
-
-    const columnResponse = await columnAlert.presentSheet()
-
-    if (columnResponse === -1 || columnResponse === exitIndex) {
-      // Exit immediately
-      return
-    } else if (columnResponse === sortItemsIndex) {
-      // Sort Items
-      await showSortMenu()
-    } else if (columnResponse === addNewItemIndex) {
-      // Add New Item
-      await addItem()
-    } else if (columnResponse >= 0 && columnResponse < nonEmptyColumns.length) {
-      // Column selected, show items in that column
-      const selectedColumn = nonEmptyColumns[columnResponse]
-      await showColumnItems(itemsByColumn[selectedColumn], selectedColumn)
+    let columnItems = config.items.filter(item => item.column === column)
+    
+    for (let item of columnItems) {
+      let itemStack = columnStack.addStack()
+      let itemText = itemStack.addText(item.name)
+      itemText.font = getFont(14)
+      itemText.textColor = new Color("#" + themeConfig.textColor)
+      itemText.lineLimit = 1
+      
+      itemStack.setPadding(5, 5, 5, 5)
+      itemStack.backgroundColor = new Color("#444444")
+      itemStack.cornerRadius = 5
+      
+      itemStack.url = `scriptable:///run?scriptName=${encodeURIComponent(Script.name())}&action=editItem&itemName=${encodeURIComponent(item.name)}`
+    }
+    
+    if (columnItems.length > 0) {
+      let moveAllStack = columnStack.addStack()
+      let moveAllText = moveAllStack.addText("Move All")
+      moveAllText.font = getFont(12)
+      moveAllText.textColor = new Color("#" + themeConfig.textColor)
+      moveAllStack.backgroundColor = new Color("#666666")
+      moveAllStack.cornerRadius = 5
+      moveAllStack.setPadding(5, 5, 5, 5)
+      moveAllStack.url = `scriptable:///run?scriptName=${encodeURIComponent(Script.name())}&action=moveItems&fromColumn=${column}`
+    }
+    
+    let addButton = columnStack.addText("+")
+    addButton.font = getFont(20)
+    addButton.textColor = new Color("#" + themeConfig.textColor)
+    addButton.url = `scriptable:///run?scriptName=${encodeURIComponent(Script.name())}&action=addItem&column=${column}`
+    
+    if (column !== 'right') {
+      mainStack.addSpacer()
     }
   }
+
+  return widget
 }
 
-
-
-// Show items in a specific column
-async function showColumnItems(items, column) {
-  const itemAlert = new Alert()
-  itemAlert.title = `${column.charAt(0).toUpperCase() + column.slice(1)} Column`
-  itemAlert.message = "Select an item to edit or choose an action"
-
-  // Check if items is undefined or empty
-  if (!items || items.length === 0) {
-    console.log(`No items found in ${column} column`)
-    itemAlert.message = `No items found in ${column} column`
-    itemAlert.addAction("Add New Item")
-    itemAlert.addCancelAction("Back to Columns")
-    
-    const response = await itemAlert.presentSheet()
-    if (response === 0) {
-      await addItem()
-    }
-    return
-  }
-
-  items.forEach(item => {
-    if (item && item.name) {
-      itemAlert.addAction(item.name)
-    } else {
-      console.log("Found an invalid item:", item)
-    }
-  })
-
-  const otherColumns = ['left', 'center', 'right'].filter(col => col !== column)
-  otherColumns.forEach(col => {
-    itemAlert.addAction(`Move All to ${col.charAt(0).toUpperCase() + col.slice(1)}`)
-  })
-
-  itemAlert.addCancelAction("Back")
-
-  const itemResponse = await itemAlert.presentSheet()
-
-  if (itemResponse < items.length) {
-    // An item was selected, edit it
-    if (items[itemResponse] && items[itemResponse].name) {
-      await editItem(items[itemResponse])
-    } else {
-      console.log("Attempted to edit an invalid item:", items[itemResponse])
-    }
-  } else if (itemResponse >= items.length && itemResponse < items.length + 2) {
-    // Move all items to another column
-    const targetColumn = otherColumns[itemResponse - items.length]
-    await moveAllItems(column, targetColumn)
-  }
-  // If "Back to Columns" is selected or sheet is dismissed, the function will naturally end,
-  // returning to the main menu
-}
-
-// Move all items from one column to another
-async function moveAllItems(sourceColumn, targetColumn) {
+// Show editable widget
+async function showEditableWidget() {
   let config = loadConfig()
-  config.items = config.items.map(item => {
-    if (item.column === sourceColumn) {
-      item.column = targetColumn
-    }
-    return item
-  })
-  saveConfig(config)
-  console.log(`Moved all items from ${sourceColumn} to ${targetColumn}`)
+  let widget = await createEditableWidget(config)
+  await widget.presentLarge()
 }
 
 // Edit an item
-async function editItem(item) {
+async function editItem(itemName) {
   let config = loadConfig()
-  const itemIndex = config.items.findIndex(i => i.name === item.name && i.scheme === item.scheme)
-  if (itemIndex === -1) {
-    console.error("Item not found in config")
+  const item = config.items.find(i => i.name === itemName)
+  if (!item) {
+    console.error("Item not found")
     return
   }
-  
+
   const alert = new Alert()
   alert.title = "Edit Item"
   alert.message = `This item will show up from ${item.startDay !== undefined ? `day ${item.startDay}` : 'any day'} to ${item.endDay !== undefined ? `day ${item.endDay}` : 'any day'}, between ${item.startTime || 'any time'} and ${item.endTime || 'any time'}.`
 
-  
   alert.addTextField("Name", item.name)
   alert.addTextField("Scheme URL", item.scheme)
-  
+
   alert.addAction("Save")
   alert.addAction("Set Time Constraints")
-  
-  // Add move buttons based on current column
-  if (item.column !== 'left') alert.addAction("Move to Left")
-  if (item.column !== 'center') alert.addAction("Move to Center")
-  if (item.column !== 'right') alert.addAction("Move to Right")
-  
+  alert.addAction("Move")
   alert.addDestructiveAction("Delete")
   alert.addCancelAction("Cancel")
 
@@ -213,98 +179,119 @@ async function editItem(item) {
 
   switch (response) {
     case 0: // Save
-      config.items[itemIndex].name = alert.textFieldValue(0)
-      config.items[itemIndex].scheme = alert.textFieldValue(1)
+      item.name = alert.textFieldValue(0)
+      item.scheme = alert.textFieldValue(1)
+      saveConfig(config)
       break
     case 1: // Set Time Constraints
-      await setTimeConstraints(config.items[itemIndex])
+      await setTimeConstraints(item)
+      saveConfig(config)
       break
-    case 2: // Move to another column
-    case 3:
-    case 4:
-      const columns = ['left', 'center', 'right'].filter(col => col !== item.column)
-      const newColumn = columns[response - 2]
-      config.items[itemIndex].column = newColumn
+    case 2: // Move
+      await moveItems([item])
+      saveConfig(config)
       break
-    case 5: // Delete
-      config.items.splice(itemIndex, 1)
+    case 3: // Delete
+      config.items = config.items.filter(i => i.name !== itemName)
+      saveConfig(config)
       break
   }
-  
-  if (response !== -1) { // If not cancelled
-    saveConfig(config)
-  }
-  
-  // Return to the columns modal instead of the top-level menu
-  let itemsByColumn = getItemsByColumn(config.items)
-  await showColumnItems(itemsByColumn[item.column], item.column)
-}
 
-// Set time constraints
-async function setTimeConstraints(item) {
-  const timeAlert = new Alert()
-  timeAlert.title = "Set Time Constraints"
-  timeAlert.message = "Leave fields blank for no constraint."
-  
-  timeAlert.addTextField("Start Time", item.startTime || "")
-  timeAlert.addTextField("End Time", item.endTime || "")
-  timeAlert.addTextField("Start Day (0-6, 0 is Sunday)", item.startDay !== undefined ? item.startDay.toString() : "")
-  timeAlert.addTextField("End Day (0-6, 0 is Sunday)", item.endDay !== undefined ? item.endDay.toString() : "")
-  
-  timeAlert.addAction("Save")
-  timeAlert.addAction("Clear Constraints")
-  timeAlert.addCancelAction("Cancel")
-  
-  const response = await timeAlert.presentAlert()
-  
-  if (response === 0) { // Save
-    try {
-      item.startTime = validateAndFormatTime(timeAlert.textFieldValue(0));
-      item.endTime = validateAndFormatTime(timeAlert.textFieldValue(1));
-      item.startDay = validateDay(timeAlert.textFieldValue(2));
-      item.endDay = validateDay(timeAlert.textFieldValue(3));
-    } catch (error) {
-      const errorAlert = new Alert();
-      errorAlert.title = "Validation Error";
-      errorAlert.message = error.message;
-      errorAlert.addAction("OK");
-      await errorAlert.presentAlert();
-      return await setTimeConstraints(item); // Recursive call to try again
-    }
-  } else if (response === 1) { // Clear Constraints
-    delete item.startTime;
-    delete item.endTime;
-    delete item.startDay;
-    delete item.endDay;
-  }
+  await showEditableWidget()
 }
 
 // Add a new item
-async function addItem() {
+async function addItem(column) {
   const config = loadConfig()
   const alert = new Alert()
   alert.title = "Add New Item"
-  
+
   alert.addTextField("Name")
   alert.addTextField("Scheme URL")
-  
-  alert.addAction("Add to Left")
-  alert.addAction("Add to Center")
-  alert.addAction("Add to Right")
+
+  alert.addAction("Add")
   alert.addCancelAction("Cancel")
 
   const response = await alert.presentAlert()
 
-  if (response >= 0 && response <= 2) {
-    const columns = ['left', 'center', 'right']
+  if (response === 0) {
     const newItem = {
       name: alert.textFieldValue(0),
       scheme: alert.textFieldValue(1),
-      column: columns[response]
+      column: column
     }
     config.items.push(newItem)
     saveConfig(config)
   }
+
+  await showEditableWidget()
+}
+
+// Set time constraints
+async function setTimeConstraints(item) {
+  const alert = new Alert()
+  alert.title = "Set Time Constraints"
+  alert.message = "Leave fields blank for no constraint."
+
+  alert.addTextField("Start Time (HH:MM)", item.startTime || "")
+  alert.addTextField("End Time (HH:MM)", item.endTime || "")
+  alert.addTextField("Start Day (0-6, 0 is Sunday)", item.startDay !== undefined ? item.startDay.toString() : "")
+  alert.addTextField("End Day (0-6, 0 is Sunday)", item.endDay !== undefined ? item.endDay.toString() : "")
+
+  alert.addAction("Save")
+  alert.addAction("Clear Constraints")
+  alert.addCancelAction("Cancel")
+
+  const response = await alert.presentAlert()
+
+  if (response === 0) {
+    try {
+      item.startTime = validateAndFormatTime(alert.textFieldValue(0))
+      item.endTime = validateAndFormatTime(alert.textFieldValue(1))
+      item.startDay = validateDay(alert.textFieldValue(2))
+      item.endDay = validateDay(alert.textFieldValue(3))
+    } catch (error) {
+      const errorAlert = new Alert()
+      errorAlert.title = "Validation Error"
+      errorAlert.message = error.message
+      errorAlert.addAction("OK")
+      await errorAlert.presentAlert()
+      return await setTimeConstraints(item) // Try again
+    }
+  } else if (response === 1) {
+    delete item.startTime
+    delete item.endTime
+    delete item.startDay
+    delete item.endDay
+  }
+}
+
+// Move items (single item or all items from a column)
+async function moveItems(items) {
+  const config = loadConfig()
+  const alert = new Alert()
+  alert.title = "Move Item(s)"
+  alert.message = `Move ${items.length === 1 ? 'item' : 'all items'} to:`
+
+  const currentColumn = items[0].column
+  const columns = ['left', 'center', 'right'].filter(col => col !== currentColumn)
+  columns.forEach(column => {
+    alert.addAction(column)
+  })
+
+  alert.addCancelAction("Cancel")
+
+  const response = await alert.presentAlert()
+
+  if (response !== -1) {
+    const toColumn = columns[response]
+    items.forEach(item => {
+      item.column = toColumn
+    })
+    saveConfig(config)
+  }
+
+  await showEditableWidget()
 }
 
 // Show the sort menu
@@ -336,10 +323,47 @@ async function showSortMenu() {
   }
 
   saveConfig(config)
+  await showEditableWidget()
 }
 
+// Main function
 async function run() {
-  await showMainMenu()
+  const params = args.queryParameters
+  if (params && params.action) {
+    switch (params.action) {
+      case 'editItem':
+        await editItem(decodeURIComponent(params.itemName))
+        break
+      case 'addItem':
+        await addItem(decodeURIComponent(params.column))
+        break
+      case 'moveItems':
+        const config = loadConfig()
+        const fromColumn = decodeURIComponent(params.fromColumn)
+        const itemsToMove = config.items.filter(item => item.column === fromColumn)
+        await moveItems(itemsToMove)
+        break
+      default:
+        await showEditableWidget()
+    }
+  } else {
+    const menuAlert = new Alert()
+    menuAlert.title = "ZenTweak"
+    menuAlert.addAction("Edit Widget")
+    menuAlert.addAction("Sort Items")
+    menuAlert.addCancelAction("Exit")
+
+    const menuChoice = await menuAlert.presentAlert()
+
+    switch (menuChoice) {
+      case 0:
+        await showEditableWidget()
+        break
+      case 1:
+        await showSortMenu()
+        break
+    }
+  }
 }
 
 await run()
