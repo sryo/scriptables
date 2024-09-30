@@ -164,8 +164,11 @@ async function createWidget() {
   // Set up the widget URL
   widget.url = userConfig.widgetUrl
 
+  // Set the refresh interval to 5 minutes
+  widget.refreshAfterDate = new Date(Date.now() + 5 * 60 * 1000)
+
   let events = await getUpcomingEvents(userConfig.eventCount)
-  
+    
   events.forEach((event, index) => {
     let eventStack = widget.addStack()
     eventStack.layoutHorizontally()
