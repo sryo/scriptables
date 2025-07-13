@@ -34,6 +34,18 @@ al life and enhance productivity.
 - **Sorting**: Items can be sorted alphabetically or by usage frequency.
 - **Autosizing**: The widget dynamically adjusts text size based on usage frequency, making more frequently used items more prominent.
 
+### ZenTrate_ultra_light.js
+
+ZenTrate_ultra_light is based on ZenTrate.js but is strongly reduced in customization and it is created to run as fast as possible, with the least amount of battery usage. Its layout is based on the day/time widget of the IOS Minimal App (Minimalist Launcher).
+
+**Still Customizable:**
+- Items (flexible amount) with their belonging URL schemes
+- Font and font size
+- Colours (background, font)
+- if needed: spacing
+
+![screenshot](https://github.com/OGentner/scriptables/blob/main/Screenshot_Scriptable_Widget.PNG?raw=true)
+
 ### ZenLendar.js
 
 ZenLendar displays your calendar events in a clean, concise format. It integrates directly with ZenTrate, following the same minimal design principles.
