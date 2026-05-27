@@ -51,8 +51,7 @@ function saveConfig(config) {
  */
 function createEditableWidget(config) {
   const themeConfig = ZenCore.loadTheme()
-  const widget = new ListWidget()
-  widget.backgroundColor = ZenCore.getBackgroundColor(themeConfig)
+  const widget = ZenCore.createWidget({ theme: themeConfig })
 
   const mainStack = widget.addStack()
   mainStack.layoutHorizontally()

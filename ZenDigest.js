@@ -119,34 +119,7 @@ async function getWeather() {
 // DATA FETCHING
 // ============================================
 
-function getTodayRange() {
-  const now = new Date()
-  return {
-    start: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0),
-    end: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59)
-  }
-}
-
-async function getTodayEvents() {
-  try {
-    const calendars = await Calendar.forEvents()
-    const { start, end } = getTodayRange()
-    return await CalendarEvent.between(start, end, calendars)
-  } catch (e) {
-    return []
-  }
-}
-
-async function getTodayReminders() {
-  try {
-    const calendars = await Calendar.forReminders()
-    const { start, end } = getTodayRange()
-    const reminders = await Reminder.allDueBetween(start, end, calendars)
-    return reminders.filter(r => !r.isCompleted)
-  } catch (e) {
-    return []
-  }
-}
+const ZenCalendar = importModule("lib/calendar")
 
 // ============================================
 // CATEGORIZATION
@@ -370,8 +343,8 @@ async function createWidget() {
 
   // Fetch data
   const [rawEvents, reminders, weather] = await Promise.all([
-    getTodayEvents(),
-    getTodayReminders(),
+    ZenCalendar.getTodayEvents(),
+    ZenCalendar.getTodayReminders(),
     getWeather()
   ])
 
