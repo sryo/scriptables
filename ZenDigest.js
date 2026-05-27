@@ -166,14 +166,6 @@ function getNextUpcoming(events, reminders) {
 // NATURAL LANGUAGE GENERATION
 // ============================================
 
-function getGreeting() {
-  const hour = new Date().getHours()
-  if (hour < 12) return "Good morning"
-  if (hour < 17) return "Good afternoon"
-  if (hour < 21) return "Good evening"
-  return "Good night"
-}
-
 function describeWeather(weather) {
   if (!weather) return null
 
@@ -213,7 +205,7 @@ function pluralize(count, singular, plural) {
 }
 
 function describeGreeting(nextItem) {
-  const greeting = getGreeting()
+  const greeting = ZenCore.getGreeting()
 
   if (nextItem) {
     const timeUntil = formatTimeUntil(nextItem.startDate)
