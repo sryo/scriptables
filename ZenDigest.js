@@ -9,27 +9,14 @@
  */
 
 const ZenCore = importModule("lib/ZenCore")
+const ZenDigestConfig = importModule("config/zendigest")
 
 // ============================================
 // CONFIGURATION
 // ============================================
 
 const themeConfig = ZenCore.loadTheme()
-
-const DEFAULT_CONFIG = {
-  widgetUrl: "calshow://",
-  showWeather: true
-}
-
-function loadConfig() {
-  return { ...DEFAULT_CONFIG, ...ZenCore.loadJSON(ZenCore.PATHS.zendigestConfig, DEFAULT_CONFIG) }
-}
-
-function saveConfig(config) {
-  ZenCore.saveJSON(ZenCore.PATHS.zendigestConfig, config)
-}
-
-let userConfig = loadConfig()
+let userConfig = ZenDigestConfig.loadConfig()
 
 // ============================================
 // WEATHER
@@ -423,7 +410,7 @@ async function presentConfigAlert() {
 
   userConfig.widgetUrl = alert.textFieldValue(0).trim() || "calshow://"
   userConfig.showWeather = alert.textFieldValue(1).toLowerCase() === 'true'
-  saveConfig(userConfig)
+  ZenDigestConfig.saveConfig(userConfig)
 
   return userConfig
 }

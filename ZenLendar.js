@@ -11,35 +11,14 @@
  */
 
 const ZenCore = importModule("lib/ZenCore")
+const ZenLendarConfig = importModule("config/zenlendar")
 
 // ============================================
 // CONFIGURATION
 // ============================================
 
 const themeConfig = ZenCore.loadTheme()
-
-const DEFAULT_CONFIG = {
-  eventCount: 5,
-  widgetUrl: "calshow://"
-}
-
-/**
- * Loads user configuration
- * @returns {Object} User config with defaults applied
- */
-function loadConfig() {
-  return { ...DEFAULT_CONFIG, ...ZenCore.loadJSON(ZenCore.PATHS.zenlendarConfig, DEFAULT_CONFIG) }
-}
-
-/**
- * Saves user configuration
- * @param {Object} config - Config to save
- */
-function saveConfig(config) {
-  ZenCore.saveJSON(ZenCore.PATHS.zenlendarConfig, config)
-}
-
-let userConfig = loadConfig()
+let userConfig = ZenLendarConfig.loadConfig()
 
 // ============================================
 // FONT SIZE CALCULATION
@@ -140,7 +119,7 @@ async function presentConfigAlert() {
 
   userConfig.eventCount = count
   userConfig.widgetUrl = url
-  saveConfig(userConfig)
+  ZenLendarConfig.saveConfig(userConfig)
 
   return userConfig
 }

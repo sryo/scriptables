@@ -12,33 +12,14 @@
  */
 
 const ZenCore = importModule("lib/ZenCore")
+const ZenTrateConfig = importModule("config/zentrate")
 
 // ============================================
 // CONFIGURATION
 // ============================================
 
-const DEFAULT_CONFIG = { items: [], sortMethod: "manual" }
-
-/**
- * Loads and validates launcher configuration
- * @returns {Object} Config with items array and sortMethod
- */
-function loadConfig() {
-  const config = ZenCore.loadJSON(ZenCore.PATHS.zentrateConfig, DEFAULT_CONFIG)
-  // Filter out invalid items
-  config.items = (config.items || []).filter(item =>
-    item && typeof item === 'object' && item.name && item.scheme && item.column
-  )
-  return config
-}
-
-/**
- * Saves launcher configuration
- * @param {Object} config - Config to save
- */
-function saveConfig(config) {
-  ZenCore.saveJSON(ZenCore.PATHS.zentrateConfig, config)
-}
+const loadConfig = ZenTrateConfig.loadConfigForEditor
+const saveConfig = ZenTrateConfig.saveConfig
 
 // ============================================
 // WYSIWYG EDITOR WIDGET

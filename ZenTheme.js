@@ -20,7 +20,6 @@ const ZenCore = importModule("lib/ZenCore")
  * Ensures themes folder exists with default theme
  */
 function ensureThemesFolder() {
-  ZenCore.ensureDirectory(ZenCore.PATHS.themesFolder)
   const themes = ZenCore.loadAllThemes()
   if (themes.length === 0) {
     ZenCore.saveThemeToFolder(ZenCore.DEFAULT_THEME, "noir.json")

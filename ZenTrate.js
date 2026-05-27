@@ -12,76 +12,15 @@
  */
 
 const ZenCore = importModule("lib/ZenCore")
+const ZenTrateConfig = importModule("config/zentrate")
 
 // ============================================
 // CONFIGURATION
 // ============================================
 
 const themeConfig = ZenCore.loadTheme()
-
-/**
- * Creates example configuration for first run
- * @returns {Object} Example config
- */
-function createExampleConfig() {
-  const exampleConfig = {
-    items: [
-      { name: "Settings", column: "left", scheme: "App-prefs://", position: 1 },
-      { name: "Weather", column: "left", scheme: "weather://", position: 2 },
-      { name: "Messages", column: "left", scheme: "messages://", position: 3 },
-      { name: "Calendar", column: "left", scheme: "calshow://", position: 4 },
-      { name: "Phone", column: "left", scheme: "tel://", position: 5 },
-      { name: "Maps", column: "left", scheme: "maps://", position: 6 },
-      { name: "Create Reminder", column: "right", scheme: "shortcuts://run-shortcut?name=Create%20Reminder", position: 1 },
-      { name: "Take Photo", column: "right", scheme: "shortcuts://run-shortcut?name=Take%20Photo", position: 2 },
-      { name: "QR Scanner", column: "right", scheme: "shortcuts://run-shortcut?name=QR%20Scanner", position: 3 },
-      { name: "Shazam", column: "right", scheme: "shortcuts://run-shortcut?name=Shazam", position: 4 }
-    ],
-    sortMethod: "manual"
-  }
-  ZenCore.saveJSON(ZenCore.PATHS.zentrateConfig, exampleConfig)
-  return exampleConfig
-}
-
-/**
- * Loads launcher configuration
- * @returns {Object} Config with items and sortMethod
- */
-function loadConfig() {
-  const config = ZenCore.loadJSON(ZenCore.PATHS.zentrateConfig, null)
-  if (!config) return createExampleConfig()
-  return config
-}
-
-/**
- * Loads usage statistics
- * @returns {Object} Stats object with item names as keys
- */
-function loadStats() {
-  return ZenCore.loadJSON(ZenCore.PATHS.zentrateStats, {})
-}
-
-/**
- * Saves usage statistics
- * @param {Object} stats - Stats to save
- */
-function saveStats(stats) {
-  ZenCore.saveJSON(ZenCore.PATHS.zentrateStats, stats, false)
-}
-
-/**
- * Updates usage count for an item
- * @param {string} name - Item name
- */
-function updateUsageCount(name) {
-  const stats = loadStats()
-  stats[name] = (stats[name] || 0) + 1
-  saveStats(stats)
-}
-
-// Load configuration and stats
-const appConfig = loadConfig()
-const usageStats = loadStats()
+const appConfig = ZenTrateConfig.loadConfig()
+const usageStats = ZenTrateConfig.loadStats()
 const sortMethod = appConfig.sortMethod || "manual"
 
 // ============================================
@@ -269,7 +208,7 @@ if (params.shortcut) {
   // Handle item tap - update stats and open URL
   const shortcutName = decodeURIComponent(params.shortcut)
   const originalUrl = decodeURIComponent(params.originalUrl)
-  updateUsageCount(shortcutName)
+  ZenTrateConfig.updateUsageCount(shortcutName)
   Safari.open(originalUrl)
   Script.complete()
 } else {
