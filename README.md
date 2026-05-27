@@ -24,7 +24,7 @@ al life and enhance productivity.
 - When you run ZenTrate for the first time, it will create a default configuration file (`zentrate_config.json`) in your iCloud Scriptable documents directory. This file contains example items (apps and shortcuts) that you can customize.
 - ZenLendar provides a minimalist calendar view for your home screen.
 - On the first run, ZenTheme will create a default theme (`noir.json`) and store it in the `ZenThemes` folder in your iCloud Scriptable documents directory. You can also create your own.
-  
+
 ## How to use
 
 ### ZenTrate.js

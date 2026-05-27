@@ -1,162 +1,187 @@
 // Variables used by Scriptable.
 // These must be at the very top of the file. Do not edit.
 // icon-color: deep-gray; icon-glyph: paint-brush;
-// ZenTheme.js: Theme configuration for ZenTrate and ZenLendar
+/**
+ * ZenTheme.js - Theme Manager for Zen* Widget Suite
+ *
+ * Features:
+ * - Browse and select saved themes
+ * - Create new custom themes
+ * - Edit theme properties (colors, fonts, sizes)
+ */
 
-const fm = FileManager.iCloud()
-const THEMES_FOLDER = fm.documentsDirectory() + "/ZenThemes"
-const THEME_FILE = fm.documentsDirectory() + "/zentrate_theme.json"
+const ZenCore = importModule("lib/ZenCore")
 
-// Default theme configuration
-const DEFAULT_THEME = {
-  name: "Noir",
-  author: "sryo",
-  bgColor: "000000",
-  textColor: "FFFFFF",
-  fontName: "system",
-  fontWeight: "bold",
-  fontItalic: false,
-  minFontSize: 10,
-  maxFontSize: 20
-}
+// ============================================
+// INITIALIZATION
+// ============================================
 
-// Ensure themes folder exists
+/**
+ * Ensures themes folder exists with default theme
+ */
 function ensureThemesFolder() {
-  if (!fm.fileExists(THEMES_FOLDER)) {
-    fm.createDirectory(THEMES_FOLDER)
-    saveTheme(DEFAULT_THEME, "noir.json")
+  ZenCore.ensureDirectory(ZenCore.PATHS.themesFolder)
+  const themes = ZenCore.loadAllThemes()
+  if (themes.length === 0) {
+    ZenCore.saveThemeToFolder(ZenCore.DEFAULT_THEME, "noir.json")
   }
 }
 
-// Load theme configuration
-function loadThemeConfig() {
-  if (fm.fileExists(THEME_FILE)) {
-    const configString = fm.readString(THEME_FILE)
-    return JSON.parse(configString)
-  }
-  return DEFAULT_THEME
-}
+// ============================================
+// THEME PICKER UI
+// ============================================
 
-// Save theme configuration
-function saveThemeConfig(config) {
-  fm.writeString(THEME_FILE, JSON.stringify(config, null, 2))
-}
-
-// Save a theme to the themes folder
-function saveTheme(theme, filename) {
-  const themePath = fm.joinPath(THEMES_FOLDER, filename)
-  const themeString = JSON.stringify(theme, null, 2)
-  fm.writeString(themePath, themeString)
-}
-
-// Load themes from the themes folder
-function loadThemes() {
-  const themes = []
-  const files = fm.listContents(THEMES_FOLDER)
-  for (const file of files) {
-    if (file.endsWith('.json')) {
-      const themePath = fm.joinPath(THEMES_FOLDER, file)
-      const themeString = fm.readString(themePath)
-      const theme = JSON.parse(themeString)
-      theme.filename = file
-      themes.push(theme)
-    }
-  }
-  
-  // Sort themes alphabetically by name
-  themes.sort((a, b) => a.name.localeCompare(b.name))
-  
-  return themes
-}
-
-// Show theme picker UI
+/**
+ * Shows the main theme picker interface
+ * @returns {Promise<boolean>} True if a theme was selected/created
+ */
 async function showThemePicker() {
-  const themes = loadThemes()
+  const themes = ZenCore.loadAllThemes()
   const alert = new Alert()
   alert.title = "ZenTheme"
   alert.message = "Pick or create a new theme"
-  
+
   themes.forEach(theme => {
     alert.addAction(theme.name)
   })
-  
+
   alert.addAction("New Theme")
   alert.addCancelAction("Cancel")
-  
+
   const response = await alert.presentSheet()
-  
+
   if (response === themes.length) {
     return showConfigurationUI()
   } else if (response !== -1) {
-    saveThemeConfig(themes[response])
+    ZenCore.saveTheme(themes[response])
+    await ZenCore.showSuccess("Theme Applied", `"${themes[response].name}" is now active.`)
     return true
   }
-  
+
   return false
 }
 
-// Show configuration UI
+// ============================================
+// THEME EDITOR UI
+// ============================================
+
+/**
+ * Field definitions for theme editor
+ */
+const THEME_FIELDS = [
+  { key: "name", label: "Theme Name" },
+  { key: "author", label: "Author" },
+  { key: "bgColor", label: "Background (hex)" },
+  { key: "textColor", label: "Text (hex)" },
+  { key: "fontName", label: "Font (system/serif/monospaced/rounded)" },
+  { key: "fontWeight", label: "Weight (regular/bold/medium)" },
+  { key: "fontItalic", label: "Italic (true/false)" },
+  { key: "minFontSize", label: "Min Size (8-72)" },
+  { key: "maxFontSize", label: "Max Size (8-72)" }
+]
+
+/**
+ * Validates theme configuration
+ * @param {Object} theme - Theme to validate
+ * @returns {{valid: boolean, errors: string[]}}
+ */
+function validateTheme(theme) {
+  const errors = []
+
+  if (!theme.name || theme.name.trim() === "") {
+    errors.push("Theme name is required")
+  }
+
+  if (!ZenCore.validateHexColor(theme.bgColor)) {
+    errors.push("Invalid background color (use 6-digit hex, e.g., 000000)")
+  }
+
+  if (!ZenCore.validateHexColor(theme.textColor)) {
+    errors.push("Invalid text color (use 6-digit hex, e.g., FFFFFF)")
+  }
+
+  const minSize = parseInt(theme.minFontSize)
+  const maxSize = parseInt(theme.maxFontSize)
+
+  if (isNaN(minSize) || minSize < 8 || minSize > 72) {
+    errors.push("Min font size must be 8-72")
+  }
+
+  if (isNaN(maxSize) || maxSize < 8 || maxSize > 72) {
+    errors.push("Max font size must be 8-72")
+  }
+
+  if (!isNaN(minSize) && !isNaN(maxSize) && minSize > maxSize) {
+    errors.push("Min font size cannot be larger than max")
+  }
+
+  return { valid: errors.length === 0, errors }
+}
+
+/**
+ * Shows the theme configuration/creation UI
+ * @returns {Promise<boolean>} True if theme was saved
+ */
 async function showConfigurationUI() {
-  const currentTheme = loadThemeConfig()
+  const currentTheme = ZenCore.loadTheme()
   const alert = new Alert()
   alert.title = "New Theme"
-  
-  const fields = [
-    { key: "name", label: "Theme Name" },
-    { key: "author", label: "Author" },
-    { key: "bgColor", label: "Background" },
-    { key: "textColor", label: "Text" },
-    { key: "fontName", label: "Font (system/serif/monospaced/rounded)" },
-    { key: "fontWeight", label: "Weight" },
-    { key: "fontItalic", label: "Italic" },
-    { key: "minFontSize", label: "Min Size" },
-    { key: "maxFontSize", label: "Max Size" }
-  ]
-  
-  fields.forEach(field => {
-    const value = currentTheme[field.key].toString()
-    alert.addTextField(`${field.label}: ${value}`, value)
+
+  THEME_FIELDS.forEach(field => {
+    const value = String(currentTheme[field.key] || "")
+    alert.addTextField(`${field.label}`, value)
   })
-  
+
   alert.addAction("Save")
   alert.addCancelAction("Cancel")
-  
+
   const response = await alert.presentAlert()
-  
-  if (response !== -1) {  // If not cancelled
+
+  if (response !== -1) {
     const newTheme = {}
-    fields.forEach((field, index) => {
+    THEME_FIELDS.forEach((field, index) => {
       newTheme[field.key] = alert.textFieldValue(index)
     })
-    
+
     // Convert fontItalic to boolean
     newTheme.fontItalic = newTheme.fontItalic.toLowerCase() === 'true'
-    
+
     // Convert font sizes to numbers
-    newTheme.minFontSize = parseInt(newTheme.minFontSize)
-    newTheme.maxFontSize = parseInt(newTheme.maxFontSize)
-    
-    // Generate filename for the theme
+    newTheme.minFontSize = parseInt(newTheme.minFontSize) || 10
+    newTheme.maxFontSize = parseInt(newTheme.maxFontSize) || 20
+
+    // Validate theme
+    const validation = validateTheme(newTheme)
+    if (!validation.valid) {
+      await ZenCore.showError("Validation Error", validation.errors.join("\n"))
+      return showConfigurationUI() // Retry
+    }
+
+    // Clean hex colors (remove # if present)
+    newTheme.bgColor = ZenCore.validateHexColor(newTheme.bgColor)
+    newTheme.textColor = ZenCore.validateHexColor(newTheme.textColor)
+
+    // Generate filename
     const filename = `${newTheme.name.toLowerCase().replace(/\s+/g, '-')}.json`
-    
-    // Save as current theme
-    saveThemeConfig(newTheme)
-    
-    // Save or update theme in ZenThemes folder
-    saveTheme(newTheme, filename)
-    
-    // Provide feedback to the user
-    const successAlert = new Alert()
-    successAlert.title = "Theme Saved"
-    successAlert.message = `Your theme "${newTheme.name}" has been saved and is available in the ZenThemes folder as "${filename}".`
-    successAlert.addAction("OK")
-    await successAlert.present()
-    
-    return true  // Configuration updated
+
+    // Save as current theme and to folder
+    ZenCore.saveTheme(newTheme)
+    ZenCore.saveThemeToFolder(newTheme, filename)
+
+    await ZenCore.showSuccess(
+      "Theme Saved",
+      `Your theme "${newTheme.name}" has been saved and is available in the ZenThemes folder as "${filename}".`
+    )
+
+    return true
   }
-  
-  return false  // Configuration not updated
+
+  return false
 }
+
+// ============================================
+// MAIN EXECUTION
+// ============================================
 
 async function run() {
   ensureThemesFolder()
@@ -164,6 +189,6 @@ async function run() {
   Script.complete()
 }
 
-if (config.runsInApp) {
+if (ZenCore.isApp()) {
   await run()
 }

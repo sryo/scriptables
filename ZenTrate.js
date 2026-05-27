@@ -1,202 +1,165 @@
 // Variables used by Scriptable.
 // These must be at the very top of the file. Do not edit.
 // icon-color: deep-gray; icon-glyph: bars;
-// ZenTrate.js: A Configurable Productivity Launcher Widget for Scriptable
+/**
+ * ZenTrate.js - A Configurable Productivity Launcher Widget
+ *
+ * Features:
+ * - 3-column layout (left, center, right)
+ * - Usage-based font scaling
+ * - Time and day constraints for items
+ * - Multiple sort modes (manual, alphabetical, usage)
+ */
 
-// Theme configuration
-const THEME_FILE = FileManager.iCloud().documentsDirectory() + "/zentrate_theme.json"
+const ZenCore = importModule("lib/ZenCore")
 
-function loadThemeConfig() {
-  if (FileManager.iCloud().fileExists(THEME_FILE)) {
-    const configString = FileManager.iCloud().readString(THEME_FILE)
-    return JSON.parse(configString)
-  }
-  return {
-    bgColor: "000000",
-    textColor: "FFFFFF",
-    fontName: "system",
-    fontWeight: "bold",
-    fontItalic: false,
-    minFontSize: 10,
-    maxFontSize: 30
-  }
-}
+// ============================================
+// CONFIGURATION
+// ============================================
 
-const themeConfig = loadThemeConfig()
+const themeConfig = ZenCore.loadTheme()
 
-function getFont(size, config = themeConfig) {
-  const fontName = config.fontName || "System";
-  const weight = config.fontWeight || "regular";
-  const isItalic = config.fontItalic || false;
-
-  let font;
-  if (fontName.toLowerCase() === "system") {
-    font = Font[weight + "SystemFont"](size);
-  } else {
-    font = new Font(fontName, size);
-  }
-
-  if (isItalic) {
-    font = Font.italicSystemFont(size);
-  }
-
-  return font;
-}
-
-// File paths
-const CONFIG_FILE = FileManager.iCloud().documentsDirectory() + "/zentrate_config.json"
-const STATS_FILE = FileManager.iCloud().documentsDirectory() + "/zentrate_stats.json"
-
-// Create example configuration
+/**
+ * Creates example configuration for first run
+ * @returns {Object} Example config
+ */
 function createExampleConfig() {
   const exampleConfig = {
     items: [
-      { name: "Settings", column: "left", scheme: "App-prefs://" },
-      { name: "Weather", column: "left", scheme: "weather://" },
-      { name: "Messages", column: "left", scheme: "messages://" },
-      { name: "Calendar", column: "left", scheme: "calshow://" },
-      { name: "Phone", column: "left", scheme: "tel://" },
-      { name: "Maps", column: "left", scheme: "maps://" },
-      { name: "Create Reminder", column: "right", scheme: "shortcuts://run-shortcut?name=Create%20Reminder" },
-      { name: "Take Photo", column: "right", scheme: "shortcuts://run-shortcut?name=Take%20Photo" },
-      { name: "QR Scanner", column: "right", scheme: "shortcuts://run-shortcut?name=QR%20Scanner" },
-      { name: "Shazam", column: "right", scheme: "shortcuts://run-shortcut?name=Shazam" }
+      { name: "Settings", column: "left", scheme: "App-prefs://", position: 1 },
+      { name: "Weather", column: "left", scheme: "weather://", position: 2 },
+      { name: "Messages", column: "left", scheme: "messages://", position: 3 },
+      { name: "Calendar", column: "left", scheme: "calshow://", position: 4 },
+      { name: "Phone", column: "left", scheme: "tel://", position: 5 },
+      { name: "Maps", column: "left", scheme: "maps://", position: 6 },
+      { name: "Create Reminder", column: "right", scheme: "shortcuts://run-shortcut?name=Create%20Reminder", position: 1 },
+      { name: "Take Photo", column: "right", scheme: "shortcuts://run-shortcut?name=Take%20Photo", position: 2 },
+      { name: "QR Scanner", column: "right", scheme: "shortcuts://run-shortcut?name=QR%20Scanner", position: 3 },
+      { name: "Shazam", column: "right", scheme: "shortcuts://run-shortcut?name=Shazam", position: 4 }
     ],
     sortMethod: "manual"
   }
-  FileManager.iCloud().writeString(CONFIG_FILE, JSON.stringify(exampleConfig, null, 2))
+  ZenCore.saveJSON(ZenCore.PATHS.zentrateConfig, exampleConfig)
   return exampleConfig
 }
 
-// Load configuration
+/**
+ * Loads launcher configuration
+ * @returns {Object} Config with items and sortMethod
+ */
 function loadConfig() {
-  if (FileManager.iCloud().fileExists(CONFIG_FILE)) {
-    const configString = FileManager.iCloud().readString(CONFIG_FILE)
-    return JSON.parse(configString)
-  }
-  return createExampleConfig()
+  const config = ZenCore.loadJSON(ZenCore.PATHS.zentrateConfig, null)
+  if (!config) return createExampleConfig()
+  return config
 }
 
-// Load usage statistics
+/**
+ * Loads usage statistics
+ * @returns {Object} Stats object with item names as keys
+ */
 function loadStats() {
-  if (FileManager.iCloud().fileExists(STATS_FILE)) {
-    const statsString = FileManager.iCloud().readString(STATS_FILE)
-    return JSON.parse(statsString)
-  }
-  return {}
+  return ZenCore.loadJSON(ZenCore.PATHS.zentrateStats, {})
 }
 
-// Save usage statistics
+/**
+ * Saves usage statistics
+ * @param {Object} stats - Stats to save
+ */
 function saveStats(stats) {
-  FileManager.iCloud().writeString(STATS_FILE, JSON.stringify(stats))
+  ZenCore.saveJSON(ZenCore.PATHS.zentrateStats, stats, false)
 }
 
-// Update usage count
+/**
+ * Updates usage count for an item
+ * @param {string} name - Item name
+ */
 function updateUsageCount(name) {
-  let stats = loadStats()
-  if (!stats[name]) {
-    stats[name] = 0
-  }
-  stats[name]++
+  const stats = loadStats()
+  stats[name] = (stats[name] || 0) + 1
   saveStats(stats)
 }
 
-// Load current configuration and usage statistics
-let config = loadConfig()
-let usageStats = loadStats()
+// Load configuration and stats
+const appConfig = loadConfig()
+const usageStats = loadStats()
+const sortMethod = appConfig.sortMethod || "manual"
 
-// Set default values for widget configuration
-let showLeft = true
-let showCenter = true
-let showRight = true
-let sortMethod = config.sortMethod || "manual"
+// ============================================
+// ITEM FILTERING & SORTING
+// ============================================
 
-// Check if an item should be displayed based on time constraints
+/**
+ * Checks if an item should be displayed based on time/day constraints
+ * @param {Object} item - Item to check
+ * @returns {boolean} True if item should be shown
+ */
 function shouldDisplayItem(item) {
-  const now = new Date()
-  const currentHour = now.getHours()
-  const currentMinute = now.getMinutes()
-  const currentDay = now.getDay()
-
-  if (item.startTime) {
-    const [startHour, startMinute] = item.startTime.split(':').map(Number)
-    if (currentHour < startHour || (currentHour === startHour && currentMinute < startMinute)) {
-      return false
-    }
-  }
-
-  if (item.endTime) {
-    const [endHour, endMinute] = item.endTime.split(':').map(Number)
-    if (currentHour > endHour || (currentHour === endHour && currentMinute > endMinute)) {
-      return false
-    }
-  }
-
-  if (item.startDay !== undefined && item.endDay !== undefined) {
-    if (currentDay < item.startDay || currentDay > item.endDay) {
-      return false
-    }
-  }
-
-  return true
+  return ZenCore.isWithinTimeRange(item.startTime, item.endTime) &&
+         ZenCore.isWithinDayRange(item.startDay, item.endDay)
 }
 
-// Filter items based on showLeft, showCenter, showRight, and time constraints
-const filteredItems = config.items.filter(item => 
-  ((showLeft && item.column === 'left') || 
-   (showCenter && item.column === 'center') || 
-   (showRight && item.column === 'right')) && 
-  shouldDisplayItem(item)
-)
-
+/**
+ * Sorts items based on current sort method
+ * @param {Object[]} items - Items to sort
+ * @returns {Object[]} Sorted items
+ */
 function sortItems(items) {
-  switch(sortMethod) {
+  switch (sortMethod) {
     case 'usage':
       return items.sort((a, b) => (usageStats[b.name] || 0) - (usageStats[a.name] || 0))
     case 'alphabetical':
       return items.sort((a, b) => a.name.localeCompare(b.name))
     case 'manual':
     default:
-      return items // Return items in their original order
+      return items
   }
 }
 
+// Filter and sort items
+const filteredItems = appConfig.items.filter(item => shouldDisplayItem(item))
 const sortedItems = sortItems(filteredItems)
 
-// Calculate font size based on usage count
+// ============================================
+// FONT SIZE CALCULATION
+// ============================================
+
+/**
+ * Calculates font size based on usage count using hybrid logarithmic-accelerated scaling.
+ * Items with higher usage get progressively larger fonts.
+ *
+ * @param {number} usageCount - Number of times item has been used
+ * @returns {number} Calculated font size
+ */
 function getFontSize(usageCount) {
   const minSize = themeConfig.minFontSize
   const maxSize = themeConfig.maxFontSize
   const maxUsage = Math.max(...Object.values(usageStats), 1)
-  const range = maxSize - minSize
-  return Math.round(minSize + (usageCount / maxUsage) * range)
+
+  // Prevent zero division
+  const safeCount = Math.max(usageCount, 0.001)
+  const safeMax = Math.max(maxUsage, 1)
+
+  // Hybrid logarithmic-accelerated scaling
+  // Power of 10 creates aggressive curve emphasizing top items
+  const logScale = Math.log(safeCount + 1) / Math.log(safeMax + 1)
+  const acceleratedScale = Math.pow(logScale, 10)
+
+  return Math.min(
+    Math.round(minSize + acceleratedScale * (maxSize - minSize)),
+    maxSize
+  )
 }
 
-// Add an item to a row
-function addItemToRow(rowStack, item, position) {
-  let itemStack = rowStack.addStack()
-
-  const usageCount = usageStats[item.name] || 0
-  const fontSize = getFontSize(usageCount)
-  const padding = calculatePadding(fontSize)
-
-  let textStack = itemStack.addStack()
-  textStack.setPadding(padding.top, padding.left, padding.bottom, padding.right)
-  
-  let itemText = textStack.addText(item.name)
-  itemText.font = getFont(fontSize)
-  itemText.textColor = new Color("#" + themeConfig.textColor)
-  itemText.minimumScaleFactor = 0.5
-  itemText.lineLimit = 1
-
-  itemStack.url = `scriptable:///run?scriptName=${encodeURIComponent(Script.name())}&shortcut=${encodeURIComponent(item.name)}&originalUrl=${encodeURIComponent(item.scheme)}`
-}
-
+/**
+ * Calculates padding based on font size for vertical alignment
+ * @param {number} fontSize - Current font size
+ * @returns {Object} Padding values
+ */
 function calculatePadding(fontSize) {
   const maxFontSize = themeConfig.maxFontSize
-  const basePadding = 0 // Adjust this value as needed
-  const extraPadding = Math.max(0, (maxFontSize - fontSize) / 2)
-  
+  const basePadding = 0
+  const extraPadding = Math.max(0, (maxFontSize - fontSize) / 3)
+
   return {
     top: basePadding + extraPadding,
     bottom: basePadding + extraPadding,
@@ -205,73 +168,114 @@ function calculatePadding(fontSize) {
   }
 }
 
-function createWidget() {
-  let widget = new ListWidget()
-  widget.backgroundColor = new Color("#" + themeConfig.bgColor)
+// ============================================
+// WIDGET CREATION
+// ============================================
 
-  // Create a single vertical stack for all items
-  let mainStack = widget.addStack()
+/**
+ * Adds an item to a row stack
+ * @param {WidgetStack} rowStack - Row to add item to
+ * @param {Object} item - Item data
+ */
+function addItemToRow(rowStack, item) {
+  const itemStack = rowStack.addStack()
+  const usageCount = usageStats[item.name] || 0
+  const fontSize = getFontSize(usageCount)
+  const padding = calculatePadding(fontSize)
+
+  const textStack = itemStack.addStack()
+  textStack.setPadding(padding.top, padding.left, padding.bottom, padding.right)
+
+  const itemText = textStack.addText(item.name)
+  itemText.font = ZenCore.getFont(fontSize, { theme: themeConfig })
+  itemText.textColor = ZenCore.getTextColor(themeConfig)
+  itemText.minimumScaleFactor = 0.5
+  itemText.lineLimit = 1
+
+  // URL for tracking usage and launching
+  itemStack.url = ZenCore.buildActionURL(Script.name(), {
+    shortcut: item.name,
+    originalUrl: item.scheme
+  })
+}
+
+/**
+ * Creates the main widget
+ * @returns {ListWidget}
+ */
+function createWidget() {
+  const widget = ZenCore.createWidget({
+    padding: [0, 16, 0, 16],
+    theme: themeConfig
+  })
+
+  const mainStack = widget.addStack()
   mainStack.layoutVertically()
 
   // Group items by column
-  let leftItems = sortedItems.filter(item => item.column === 'left')
-  let centerItems = sortedItems.filter(item => item.column === 'center')
-  let rightItems = sortedItems.filter(item => item.column === 'right')
+  const leftItems = sortedItems.filter(item => item.column === 'left')
+  const centerItems = sortedItems.filter(item => item.column === 'center')
+  const rightItems = sortedItems.filter(item => item.column === 'right')
 
-  // Determine the maximum number of rows
-  let maxRows = Math.max(leftItems.length, centerItems.length, rightItems.length)
+  const maxRows = Math.max(leftItems.length, centerItems.length, rightItems.length)
 
   // Create rows
   for (let i = 0; i < maxRows; i++) {
-    let rowStack = mainStack.addStack()
+    const rowStack = mainStack.addStack()
     rowStack.layoutHorizontally()
     rowStack.bottomAlignContent()
 
-    // Left item
+    // Left column
     if (i < leftItems.length) {
-      addItemToRow(rowStack, leftItems[i], 'left')
+      addItemToRow(rowStack, leftItems[i])
     } else {
       rowStack.addSpacer()
     }
 
     rowStack.addSpacer()
 
-    // Center item
+    // Center column
     if (i < centerItems.length) {
-      addItemToRow(rowStack, centerItems[i], 'center')
+      addItemToRow(rowStack, centerItems[i])
     } else {
       rowStack.addSpacer()
     }
 
     rowStack.addSpacer()
 
-    // Right item
+    // Right column
     if (i < rightItems.length) {
-      addItemToRow(rowStack, rightItems[i], 'right')
+      addItemToRow(rowStack, rightItems[i])
     } else {
       rowStack.addSpacer()
     }
 
-    // Add vertical spacing between rows
+    // Vertical spacing between rows
     if (i < maxRows - 1) {
-      mainStack.addSpacer(2) // Adjust this value to change vertical spacing
+      mainStack.addSpacer(0)
     }
   }
 
-  widget.setPadding(0, 8, 0, 8)
   return widget
 }
 
-if (args.queryParameters && args.queryParameters.shortcut) {
-  const shortcutName = decodeURIComponent(args.queryParameters.shortcut)
-  const originalUrl = decodeURIComponent(args.queryParameters.originalUrl)
+// ============================================
+// MAIN EXECUTION
+// ============================================
+
+const params = ZenCore.getActionParams()
+
+if (params.shortcut) {
+  // Handle item tap - update stats and open URL
+  const shortcutName = decodeURIComponent(params.shortcut)
+  const originalUrl = decodeURIComponent(params.originalUrl)
   updateUsageCount(shortcutName)
   Safari.open(originalUrl)
   Script.complete()
 } else {
-  // Create and present the widget
-  let widget = createWidget()
-  if (config.runsInWidget) {
+  // Display widget
+  const widget = createWidget()
+  if (ZenCore.isWidget()) {
     Script.setWidget(widget)
   } else {
     widget.presentLarge()

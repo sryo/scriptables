@@ -1,206 +1,210 @@
 // Variables used by Scriptable.
 // These must be at the very top of the file. Do not edit.
 // icon-color: deep-gray; icon-glyph: calendar;
-// ZenLendar.js: A Customizable Minimalist Calendar Widget for Scriptable
+/**
+ * ZenLendar.js - A Customizable Minimalist Calendar Widget
+ *
+ * Features:
+ * - Displays upcoming calendar events
+ * - Exponential font decay for event urgency
+ * - Configurable event count and widget URL
+ */
 
-// Theme configuration
-const THEME_FILE = FileManager.iCloud().documentsDirectory() + "/zentrate_theme.json"
-const CONFIG_FILE = FileManager.iCloud().documentsDirectory() + "/zenlendar_config.json"
+const ZenCore = importModule("lib/ZenCore")
 
-function loadThemeConfig() {
-  if (FileManager.iCloud().fileExists(THEME_FILE)) {
-    const configString = FileManager.iCloud().readString(THEME_FILE)
-    return JSON.parse(configString)
-  }
-  return {
-    bgColor: "000000",
-    textColor: "FFFFFF",
-    fontName: "system",
-    fontWeight: "bold",
-    fontItalic: false,
-    minFontSize: 10,
-    maxFontSize: 20
-  }
+// ============================================
+// CONFIGURATION
+// ============================================
+
+const themeConfig = ZenCore.loadTheme()
+
+const DEFAULT_CONFIG = {
+  eventCount: 5,
+  widgetUrl: "calshow://"
 }
 
+/**
+ * Loads user configuration
+ * @returns {Object} User config with defaults applied
+ */
 function loadConfig() {
-  if (FileManager.iCloud().fileExists(CONFIG_FILE)) {
-    const configString = FileManager.iCloud().readString(CONFIG_FILE)
-    return JSON.parse(configString)
-  }
-  return {
-    eventCount: 5, // Default value
-    widgetUrl: "calshow://" // Default value
-  }
+  return { ...DEFAULT_CONFIG, ...ZenCore.loadJSON(ZenCore.PATHS.zenlendarConfig, DEFAULT_CONFIG) }
 }
 
+/**
+ * Saves user configuration
+ * @param {Object} config - Config to save
+ */
 function saveConfig(config) {
-  FileManager.iCloud().writeString(CONFIG_FILE, JSON.stringify(config))
+  ZenCore.saveJSON(ZenCore.PATHS.zenlendarConfig, config)
 }
 
-const themeConfig = loadThemeConfig()
 let userConfig = loadConfig()
 
-function getFont(size, config = themeConfig) {
-  const fontName = config.fontName || "System";
-  const weight = config.fontWeight || "regular";
-  const isItalic = config.fontItalic || false;
+// ============================================
+// FONT SIZE CALCULATION
+// ============================================
 
-  let font;
-  if (fontName.toLowerCase() === "system") {
-    font = Font[weight + "SystemFont"](size);
-  } else {
-    font = new Font(fontName, size);
-  }
-
-  if (isItalic) {
-    font = Font.italicSystemFont(size);
-  }
-
-  return font;
-}
-
-// Calculate font size based on event index
+/**
+ * Calculates font size based on event index using exponential decay.
+ * Earlier events (lower index) get larger fonts to indicate urgency.
+ *
+ * @param {number} index - Event index (0 = first/most urgent)
+ * @returns {number} Calculated font size
+ */
 function getFontSize(index) {
   const maxSize = themeConfig.maxFontSize
   const minSize = themeConfig.minFontSize
-  const decayFactor = 0.5 // Adjust this value to control the steepness of the decay
-  
+  const decayFactor = 0.5 // Controls steepness of decay
+
   const size = maxSize * Math.exp(-decayFactor * index)
   return Math.max(size, minSize)
 }
 
-// Get upcoming events
-async function getUpcomingEvents(maxEvents) {
-  let calendars = await Calendar.forEvents()
-  let now = new Date()
-  let futureDate = new Date(now.getTime() + 86400000 * 365) // One year from now
-  
-  let events = await CalendarEvent.between(now, futureDate, calendars)
-  return events.slice(0, maxEvents) // Limit events based on maxEvents
-}
+// ============================================
+// DATE FORMATTING
+// ============================================
 
-// Format relative time
+/**
+ * Formats event time as a relative string (e.g., "2 hours", "Tomorrow").
+ * Handles all-day events and near-future events specially.
+ *
+ * @param {CalendarEvent} event - Calendar event
+ * @returns {string} Formatted relative time string
+ */
 function formatRelativeTime(event) {
-  let now = new Date()
-  let startDate = event.startDate
-  let endDate = event.endDate
-  
+  const now = new Date()
+  const startDate = event.startDate
+  const endDate = event.endDate
+
   const formatter = new RelativeDateTimeFormatter()
   formatter.useNamedDateTimeStyle()
-  
-  // Check if it's an all-day event
+
+  // Handle all-day events happening now
   if (event.isAllDay) {
-    // Check if the event is happening now
     if (now >= startDate && now <= endDate) {
-      // Use the formatter to get a representation of "now"
       return formatter.string(now, now)
     }
   }
-  
+
   let relativeDate = formatter.string(startDate, now)
-  
-  // If the relative date is empty (which can happen for very near times), use a custom format
+
+  // Handle empty string for very near times
   if (relativeDate === "") {
-    let diff = startDate.getTime() - now.getTime()
-    let minutes = Math.floor(diff / (1000 * 60))
+    const diff = startDate.getTime() - now.getTime()
+    const minutes = Math.floor(diff / (1000 * 60))
     if (minutes <= 0) {
-      return formatter.string(now, now) // Should return the equivalent of "now" in the system's language
+      return formatter.string(now, now)
     } else {
-      // For near future events, use the default numeric style
       formatter.useNumericDateTimeStyle()
       relativeDate = formatter.string(startDate, now)
     }
   }
-  
-  // Split the string at the first number
+
+  // Remove leading text before the number for cleaner display
   const match = relativeDate.match(/\d/)
   if (match) {
-    const index = match.index
-    relativeDate = relativeDate.slice(index)
+    relativeDate = relativeDate.slice(match.index)
   }
-  
-  // Trim any leading whitespace and capitalize the first letter
+
+  // Capitalize first letter
   relativeDate = relativeDate.trim()
   return relativeDate.charAt(0).toUpperCase() + relativeDate.slice(1)
 }
 
-// Present an alert for configuration
+// ============================================
+// CONFIGURATION UI
+// ============================================
+
+/**
+ * Presents configuration alert for widget settings
+ * @returns {Promise<Object|null>} Updated config or null if cancelled
+ */
 async function presentConfigAlert() {
-  let alert = new Alert()
+  const alert = new Alert()
   alert.title = "Configure ZenLendar"
   alert.message = "Enter the number of events to display (1-10) and the widget URL:"
   alert.addTextField("Number of events", userConfig.eventCount.toString())
   alert.addTextField("Widget URL", userConfig.widgetUrl)
   alert.addAction("Save")
   alert.addCancelAction("Cancel")
-  
-  let response = await alert.present()
-  if (response === -1) {
-    // User cancelled
-    return null
-  }
-  
+
+  const response = await alert.present()
+  if (response === -1) return null
+
   let count = parseInt(alert.textFieldValue(0))
   count = isNaN(count) ? 5 : Math.min(Math.max(count, 1), 10)
-  
+
   let url = alert.textFieldValue(1).trim()
-  if (!url) {
-    url = "calshow://" // Default to Calendar app if empty
-  }
-  
+  if (!url) url = "calshow://"
+
   userConfig.eventCount = count
   userConfig.widgetUrl = url
   saveConfig(userConfig)
-  
+
   return userConfig
 }
 
-// Create and present the widget
+// ============================================
+// WIDGET CREATION
+// ============================================
+
+/**
+ * Creates the calendar widget
+ * @returns {Promise<ListWidget>}
+ */
 async function createWidget() {
-  let widget = new ListWidget()
-  widget.backgroundColor = new Color("#" + themeConfig.bgColor)
+  const widget = ZenCore.createWidget({
+    url: userConfig.widgetUrl,
+    refreshMinutes: 1,
+    padding: [0, 16, 0, 16],
+    theme: themeConfig
+  })
 
-  // Set up the widget URL
-  widget.url = userConfig.widgetUrl
+  const events = await ZenCore.getUpcomingEvents(userConfig.eventCount, 365)
 
-  // Set the refresh interval to 5 minutes
-  widget.refreshAfterDate = new Date(Date.now() + 5 * 60 * 1000)
+  if (events.length === 0) {
+    const emptyText = widget.addText("No upcoming events")
+    emptyText.textColor = ZenCore.getTextColor(themeConfig)
+    emptyText.font = ZenCore.getFont(themeConfig.minFontSize, { theme: themeConfig })
+    return widget
+  }
 
-  let events = await getUpcomingEvents(userConfig.eventCount)
-    
   events.forEach((event, index) => {
-    let eventStack = widget.addStack()
+    const eventStack = widget.addStack()
     eventStack.layoutHorizontally()
-    
-    let fontSize = getFontSize(index)
-    
-    let titleText = eventStack.addText(event.title)
-    titleText.textColor = new Color("#" + themeConfig.textColor)
-    titleText.font = getFont(fontSize * .75)
+
+    const fontSize = getFontSize(index)
+
+    const titleText = eventStack.addText(event.title)
+    titleText.textColor = ZenCore.getTextColor(themeConfig)
+    titleText.font = ZenCore.getFont(fontSize * 0.75, { theme: themeConfig })
     titleText.lineLimit = 1
-    
+
     eventStack.addSpacer()
-    
-    let timeText = eventStack.addText(formatRelativeTime(event))
-    timeText.textColor = new Color("#" + themeConfig.textColor)
-    timeText.font = getFont(fontSize * .75)
+
+    const timeText = eventStack.addText(formatRelativeTime(event))
+    timeText.textColor = ZenCore.getTextColor(themeConfig)
+    timeText.font = ZenCore.getFont(fontSize * 0.75, { theme: themeConfig })
     timeText.lineLimit = 1
-    
+
     if (index < events.length - 1) {
-      widget.addSpacer(12) // Space between events
+      widget.addSpacer(8)
     }
   })
 
-  widget.setPadding(0, 8, 0, 8)
   return widget
 }
 
+// ============================================
+// MAIN EXECUTION
+// ============================================
+
 async function run() {
-  if (config.runsInApp) {
-    const newConfig = await presentConfigAlert()
-  } else if (config.runsInWidget) {
-    let widget = await createWidget()
+  if (ZenCore.isApp()) {
+    await presentConfigAlert()
+  } else if (ZenCore.isWidget()) {
+    const widget = await createWidget()
     Script.setWidget(widget)
   }
 }

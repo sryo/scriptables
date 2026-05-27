@@ -1,0 +1,10 @@
+# Personal runtime data — generated/edited by the scripts on-device.
+zentrate_config.json
+zentrate_stats.json
+zentrate_theme.json
+zenlendar_config.json
+zendigest_config.json
+
+# Tooling
+.claude/
+.DS_Store

@@ -1,143 +1,111 @@
 // Variables used by Scriptable.
 // These must be at the very top of the file. Do not edit.
 // icon-color: deep-gray; icon-glyph: sliders-h;
-// ZenTweak.js: Configuration editor for ZenTrate
+/**
+ * ZenTweak.js - Configuration Editor for ZenTrate
+ *
+ * Features:
+ * - Visual WYSIWYG widget editor
+ * - Add, edit, delete, and move items
+ * - Time and day constraints
+ * - Sort method selection
+ */
 
-const fm = FileManager.iCloud()
-const CONFIG_FILE = fm.documentsDirectory() + "/zentrate_config.json"
-const THEME_FILE = fm.documentsDirectory() + "/zentrate_theme.json"
+const ZenCore = importModule("lib/ZenCore")
 
-// Load configuration
+// ============================================
+// CONFIGURATION
+// ============================================
+
+const DEFAULT_CONFIG = { items: [], sortMethod: "manual" }
+
+/**
+ * Loads and validates launcher configuration
+ * @returns {Object} Config with items array and sortMethod
+ */
 function loadConfig() {
-  if (fm.fileExists(CONFIG_FILE)) {
-    const configString = fm.readString(CONFIG_FILE)
-    let config = JSON.parse(configString)
-    config.items = config.items.filter(item => 
-      item && typeof item === 'object' && item.name && item.scheme && item.column
-    )
-    return config
-  }
-  return { items: [], sortMethod: "manual" }
+  const config = ZenCore.loadJSON(ZenCore.PATHS.zentrateConfig, DEFAULT_CONFIG)
+  // Filter out invalid items
+  config.items = (config.items || []).filter(item =>
+    item && typeof item === 'object' && item.name && item.scheme && item.column
+  )
+  return config
 }
 
-// Save configuration
+/**
+ * Saves launcher configuration
+ * @param {Object} config - Config to save
+ */
 function saveConfig(config) {
-  fm.writeString(CONFIG_FILE, JSON.stringify(config, null, 2))
+  ZenCore.saveJSON(ZenCore.PATHS.zentrateConfig, config)
 }
 
-// Load theme configuration
-function loadThemeConfig() {
-  if (fm.fileExists(THEME_FILE)) {
-    const configString = fm.readString(THEME_FILE)
-    return JSON.parse(configString)
-  }
-  return {
-    bgColor: "000000",
-    textColor: "FFFFFF",
-    fontName: "system",
-    fontWeight: "bold",
-    fontItalic: false,
-    minFontSize: 10,
-    maxFontSize: 30
-  }
-}
+// ============================================
+// WYSIWYG EDITOR WIDGET
+// ============================================
 
-// Get font based on theme configuration
-function getFont(size, config = loadThemeConfig()) {
-  const fontName = config.fontName || "System";
-  const weight = config.fontWeight || "regular";
-  const isItalic = config.fontItalic || false;
+/**
+ * Creates the visual editor widget showing all items
+ * @param {Object} config - Current configuration
+ * @returns {ListWidget}
+ */
+function createEditableWidget(config) {
+  const themeConfig = ZenCore.loadTheme()
+  const widget = new ListWidget()
+  widget.backgroundColor = ZenCore.getBackgroundColor(themeConfig)
 
-  let font;
-  if (fontName.toLowerCase() === "system") {
-    font = Font[weight + "SystemFont"](size);
-  } else {
-    font = new Font(fontName, size);
-  }
-
-  if (isItalic) {
-    font = Font.italicSystemFont(size);
-  }
-
-  return font;
-}
-
-// Validate and format time
-function validateAndFormatTime(time) {
-  if (!time) return undefined;
-  
-  // Support short time format
-  if (/^\d{1,2}$/.test(time)) {
-    time = time.padStart(2, '0') + ':00';
-  }
-  
-  // Validate time format
-  const timeRegex = /^([01]\d|2[0-3]):?([0-5]\d)$/;
-  if (!timeRegex.test(time)) {
-    throw new Error(`Invalid time format: ${time}. Please use HH:MM or just HH.`);
-  }
-  
-  // Ensure consistent format (HH:MM)
-  return time.length === 5 ? time : `${time}:00`;
-}
-
-// Validate day
-function validateDay(day) {
-  if (day === '') return undefined;
-  const dayNum = parseInt(day);
-  if (isNaN(dayNum) || dayNum < 0 || dayNum > 6) {
-    throw new Error(`Invalid day: ${day}. Please use a number between 0 and 6.`);
-  }
-  return dayNum;
-}
-
-// WYSIWYG editor
-async function createEditableWidget(config) {
-  let widget = new ListWidget()
-  const themeConfig = loadThemeConfig()
-  widget.backgroundColor = new Color("#" + themeConfig.bgColor)
-
-  let mainStack = widget.addStack()
+  const mainStack = widget.addStack()
   mainStack.layoutHorizontally()
 
   const columns = ['left', 'center', 'right']
-  
-  for (let column of columns) {
-    let columnStack = mainStack.addStack()
+
+  for (const column of columns) {
+    const columnStack = mainStack.addStack()
     columnStack.layoutVertically()
-    
-    let columnItems = config.items.filter(item => item.column === column)
-    
-    for (let item of columnItems) {
-      let itemStack = columnStack.addStack()
-      let itemText = itemStack.addText(item.name)
-      itemText.font = getFont(14)
-      itemText.textColor = new Color("#" + themeConfig.textColor)
+
+    const columnItems = config.items.filter(item => item.column === column)
+
+    // Item buttons
+    for (const item of columnItems) {
+      const itemStack = columnStack.addStack()
+      const itemText = itemStack.addText(item.name)
+      itemText.font = ZenCore.getFont(14, { theme: themeConfig })
+      itemText.textColor = ZenCore.getTextColor(themeConfig)
       itemText.lineLimit = 1
-      
+
       itemStack.setPadding(5, 5, 5, 5)
       itemStack.backgroundColor = new Color("#444444")
       itemStack.cornerRadius = 5
-      
-      itemStack.url = `scriptable:///run?scriptName=${encodeURIComponent(Script.name())}&action=editItem&itemName=${encodeURIComponent(item.name)}`
+      itemStack.url = ZenCore.buildActionURL(Script.name(), {
+        action: 'editItem',
+        itemName: item.name
+      })
     }
-    
+
+    // Move All button (if column has items)
     if (columnItems.length > 0) {
-      let moveAllStack = columnStack.addStack()
-      let moveAllText = moveAllStack.addText("Move All")
-      moveAllText.font = getFont(12)
-      moveAllText.textColor = new Color("#" + themeConfig.textColor)
+      const moveAllStack = columnStack.addStack()
+      const moveAllText = moveAllStack.addText("Move All")
+      moveAllText.font = ZenCore.getFont(12, { theme: themeConfig })
+      moveAllText.textColor = ZenCore.getTextColor(themeConfig)
       moveAllStack.backgroundColor = new Color("#666666")
       moveAllStack.cornerRadius = 5
       moveAllStack.setPadding(5, 5, 5, 5)
-      moveAllStack.url = `scriptable:///run?scriptName=${encodeURIComponent(Script.name())}&action=moveItems&fromColumn=${column}`
+      moveAllStack.url = ZenCore.buildActionURL(Script.name(), {
+        action: 'moveItems',
+        fromColumn: column
+      })
     }
-    
-    let addButton = columnStack.addText("+")
-    addButton.font = getFont(20)
-    addButton.textColor = new Color("#" + themeConfig.textColor)
-    addButton.url = `scriptable:///run?scriptName=${encodeURIComponent(Script.name())}&action=addItem&column=${column}`
-    
+
+    // Add button
+    const addButton = columnStack.addText("+")
+    addButton.font = ZenCore.getFont(20, { theme: themeConfig })
+    addButton.textColor = ZenCore.getTextColor(themeConfig)
+    addButton.url = ZenCore.buildActionURL(Script.name(), {
+      action: 'addItem',
+      column: column
+    })
+
     if (column !== 'right') {
       mainStack.addSpacer()
     }
@@ -146,32 +114,48 @@ async function createEditableWidget(config) {
   return widget
 }
 
-// Show editable widget
+/**
+ * Shows the editable widget
+ */
 async function showEditableWidget() {
-  let config = loadConfig()
-  let widget = await createEditableWidget(config)
+  const config = loadConfig()
+  const widget = createEditableWidget(config)
   await widget.presentLarge()
 }
 
-// Edit an item
+// ============================================
+// ITEM MANAGEMENT
+// ============================================
+
+/**
+ * Edits an existing item
+ * @param {string} itemName - Name of item to edit
+ */
 async function editItem(itemName) {
-  let config = loadConfig()
+  const config = loadConfig()
   const item = config.items.find(i => i.name === itemName)
+
   if (!item) {
-    console.error("Item not found")
+    await ZenCore.showError("Error", "Item not found")
     return
   }
 
   const alert = new Alert()
   alert.title = "Edit Item"
-  alert.message = `This item will show up from ${item.startDay !== undefined ? `day ${item.startDay}` : 'any day'} to ${item.endDay !== undefined ? `day ${item.endDay}` : 'any day'}, between ${item.startTime || 'any time'} and ${item.endTime || 'any time'}.`
+
+  // Show current constraints in message
+  const startDay = item.startDay !== undefined ? `day ${item.startDay}` : 'any day'
+  const endDay = item.endDay !== undefined ? `day ${item.endDay}` : 'any day'
+  const startTime = item.startTime || 'any time'
+  const endTime = item.endTime || 'any time'
+  alert.message = `Shows from ${startDay} to ${endDay}, between ${startTime} and ${endTime}.`
 
   alert.addTextField("Name", item.name)
   alert.addTextField("Scheme URL", item.scheme)
 
   alert.addAction("Save")
   alert.addAction("Set Time Constraints")
-  alert.addAction("Move")
+  alert.addAction("Move/Reposition")
   alert.addDestructiveAction("Delete")
   alert.addCancelAction("Cancel")
 
@@ -183,7 +167,7 @@ async function editItem(itemName) {
       item.scheme = alert.textFieldValue(1)
       saveConfig(config)
       break
-    case 1: // Set Time Constraints
+    case 1: // Time Constraints
       await setTimeConstraints(item)
       saveConfig(config)
       break
@@ -200,14 +184,20 @@ async function editItem(itemName) {
   await showEditableWidget()
 }
 
-// Add a new item
+/**
+ * Adds a new item to a column
+ * @param {string} column - Column to add to (left/center/right)
+ */
 async function addItem(column) {
   const config = loadConfig()
   const alert = new Alert()
   alert.title = "Add New Item"
 
+  const columnItems = config.items.filter(item => item.column === column)
+
   alert.addTextField("Name")
   alert.addTextField("Scheme URL")
+  alert.addTextField("Position", (columnItems.length + 1).toString())
 
   alert.addAction("Add")
   alert.addCancelAction("Cancel")
@@ -215,19 +205,95 @@ async function addItem(column) {
   const response = await alert.presentAlert()
 
   if (response === 0) {
-    const newItem = {
-      name: alert.textFieldValue(0),
-      scheme: alert.textFieldValue(1),
-      column: column
+    const name = alert.textFieldValue(0).trim()
+    const scheme = alert.textFieldValue(1).trim()
+
+    if (!name) {
+      await ZenCore.showError("Error", "Name is required")
+      await showEditableWidget()
+      return
     }
+
+    const newItem = {
+      name: name,
+      scheme: scheme || "about:blank",
+      column: column,
+      position: parseInt(alert.textFieldValue(2)) || (columnItems.length + 1)
+    }
+
     config.items.push(newItem)
+    config.items.sort((a, b) => (a.position || 0) - (b.position || 0))
     saveConfig(config)
   }
 
   await showEditableWidget()
 }
 
-// Set time constraints
+/**
+ * Moves or repositions items
+ * @param {Object[]} items - Items to move
+ */
+async function moveItems(items) {
+  const config = loadConfig()
+  const alert = new Alert()
+  alert.title = "Move/Reposition Item(s)"
+
+  const currentColumn = items[0].column
+  const columnItems = config.items.filter(item => item.column === currentColumn)
+  const currentPosition = columnItems.findIndex(item => item.name === items[0].name) + 1
+
+  alert.message = `Current position: ${currentPosition} in ${currentColumn} column`
+  alert.addTextField("New Position", currentPosition.toString())
+
+  const columns = ['left', 'center', 'right']
+  const otherColumns = columns.filter(col => col !== currentColumn)
+
+  otherColumns.forEach(col => {
+    alert.addAction(`Move to ${col.charAt(0).toUpperCase() + col.slice(1)}`)
+  })
+
+  alert.addAction("Keep Current Column")
+  alert.addCancelAction("Cancel")
+
+  const response = await alert.presentAlert()
+
+  if (response >= 0 && response <= otherColumns.length) {
+    const newPosition = parseInt(alert.textFieldValue(0)) || currentPosition
+    const newColumn = response < otherColumns.length ? otherColumns[response] : currentColumn
+
+    // Remove items from current position
+    config.items = config.items.filter(item => !items.includes(item))
+
+    // Insert at new position
+    const itemToInsert = { ...items[0], column: newColumn, position: newPosition }
+    config.items.push(itemToInsert)
+
+    // Sort and update positions
+    config.items.sort((a, b) => {
+      if (a.column !== b.column) {
+        return columns.indexOf(a.column) - columns.indexOf(b.column)
+      }
+      return (a.position || 0) - (b.position || 0)
+    })
+
+    // Renumber positions within each column
+    columns.forEach(column => {
+      const colItems = config.items.filter(item => item.column === column)
+      colItems.forEach((item, index) => {
+        item.position = index + 1
+      })
+    })
+
+    saveConfig(config)
+  }
+
+  await showEditableWidget()
+}
+
+/**
+ * Sets time and day constraints for an item
+ * @param {Object} item - Item to configure
+ */
 async function setTimeConstraints(item) {
   const alert = new Alert()
   alert.title = "Set Time Constraints"
@@ -235,8 +301,8 @@ async function setTimeConstraints(item) {
 
   alert.addTextField("Start Time (HH:MM)", item.startTime || "")
   alert.addTextField("End Time (HH:MM)", item.endTime || "")
-  alert.addTextField("Start Day (0-6, 0 is Sunday)", item.startDay !== undefined ? item.startDay.toString() : "")
-  alert.addTextField("End Day (0-6, 0 is Sunday)", item.endDay !== undefined ? item.endDay.toString() : "")
+  alert.addTextField("Start Day (0-6, 0=Sunday)", item.startDay !== undefined ? item.startDay.toString() : "")
+  alert.addTextField("End Day (0-6, 0=Sunday)", item.endDay !== undefined ? item.endDay.toString() : "")
 
   alert.addAction("Save")
   alert.addAction("Clear Constraints")
@@ -246,17 +312,13 @@ async function setTimeConstraints(item) {
 
   if (response === 0) {
     try {
-      item.startTime = validateAndFormatTime(alert.textFieldValue(0))
-      item.endTime = validateAndFormatTime(alert.textFieldValue(1))
-      item.startDay = validateDay(alert.textFieldValue(2))
-      item.endDay = validateDay(alert.textFieldValue(3))
+      item.startTime = ZenCore.validateTime(alert.textFieldValue(0))
+      item.endTime = ZenCore.validateTime(alert.textFieldValue(1))
+      item.startDay = ZenCore.validateDay(alert.textFieldValue(2))
+      item.endDay = ZenCore.validateDay(alert.textFieldValue(3))
     } catch (error) {
-      const errorAlert = new Alert()
-      errorAlert.title = "Validation Error"
-      errorAlert.message = error.message
-      errorAlert.addAction("OK")
-      await errorAlert.presentAlert()
-      return await setTimeConstraints(item) // Try again
+      await ZenCore.showError("Validation Error", error.message)
+      return setTimeConstraints(item) // Retry
     }
   } else if (response === 1) {
     delete item.startTime
@@ -266,40 +328,18 @@ async function setTimeConstraints(item) {
   }
 }
 
-// Move items (single item or all items from a column)
-async function moveItems(items) {
-  const config = loadConfig()
-  const alert = new Alert()
-  alert.title = "Move Item(s)"
-  alert.message = `Move ${items.length === 1 ? 'item' : 'all items'} to:`
+// ============================================
+// SORT MENU
+// ============================================
 
-  const currentColumn = items[0].column
-  const columns = ['left', 'center', 'right'].filter(col => col !== currentColumn)
-  columns.forEach(column => {
-    alert.addAction(column)
-  })
-
-  alert.addCancelAction("Cancel")
-
-  const response = await alert.presentAlert()
-
-  if (response !== -1) {
-    const toColumn = columns[response]
-    items.forEach(item => {
-      item.column = toColumn
-    })
-    saveConfig(config)
-  }
-
-  await showEditableWidget()
-}
-
-// Show the sort menu
+/**
+ * Shows sort method selection menu
+ */
 async function showSortMenu() {
   const config = loadConfig()
   const alert = new Alert()
   alert.title = "Sort Items"
-  alert.message = "Choose a sorting method"
+  alert.message = `Current: ${config.sortMethod || 'manual'}`
 
   alert.addAction("Manual")
   alert.addAction("Alphabetical")
@@ -308,28 +348,48 @@ async function showSortMenu() {
 
   const response = await alert.presentAlert()
 
-  switch (response) {
-    case 0:
-      config.sortMethod = "manual"
-      break
-    case 1:
-      config.sortMethod = "alphabetical"
-      break
-    case 2:
-      config.sortMethod = "usage"
-      break
-    default:
-      return
+  const methods = ["manual", "alphabetical", "usage"]
+  if (response >= 0 && response < methods.length) {
+    config.sortMethod = methods[response]
+    saveConfig(config)
   }
 
-  saveConfig(config)
   await showEditableWidget()
 }
 
-// Main function
+// ============================================
+// MAIN MENU & EXECUTION
+// ============================================
+
+/**
+ * Shows the main menu
+ */
+async function showMainMenu() {
+  const alert = new Alert()
+  alert.title = "ZenTweak"
+  alert.addAction("Edit Widget")
+  alert.addAction("Sort Items")
+  alert.addCancelAction("Exit")
+
+  const response = await alert.presentAlert()
+
+  switch (response) {
+    case 0:
+      await showEditableWidget()
+      break
+    case 1:
+      await showSortMenu()
+      break
+  }
+}
+
+/**
+ * Main execution handler
+ */
 async function run() {
-  const params = args.queryParameters
-  if (params && params.action) {
+  const params = ZenCore.getActionParams()
+
+  if (params.action) {
     switch (params.action) {
       case 'editItem':
         await editItem(decodeURIComponent(params.itemName))
@@ -341,29 +401,28 @@ async function run() {
         const config = loadConfig()
         const fromColumn = decodeURIComponent(params.fromColumn)
         const itemsToMove = config.items.filter(item => item.column === fromColumn)
-        await moveItems(itemsToMove)
+        if (itemsToMove.length > 0) {
+          await moveItems(itemsToMove)
+        }
         break
       default:
         await showEditableWidget()
     }
   } else {
-    const menuAlert = new Alert()
-    menuAlert.title = "ZenTweak"
-    menuAlert.addAction("Edit Widget")
-    menuAlert.addAction("Sort Items")
-    menuAlert.addCancelAction("Exit")
-
-    const menuChoice = await menuAlert.presentAlert()
-
-    switch (menuChoice) {
-      case 0:
-        await showEditableWidget()
-        break
-      case 1:
-        await showSortMenu()
-        break
-    }
+    await showMainMenu()
   }
 }
 
-await run()
+// ============================================
+// WIDGET MODE
+// ============================================
+
+if (ZenCore.isWidget()) {
+  const config = loadConfig()
+  const widget = createEditableWidget(config)
+  Script.setWidget(widget)
+} else {
+  await run()
+}
+
+Script.complete()
