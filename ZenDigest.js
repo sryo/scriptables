@@ -80,7 +80,7 @@ async function getWeather() {
       timeout(10000)
     ])
 
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${location.latitude}&longitude=${location.longitude}&current=temperature_2m,weather_code&daily=temperature_2m_max,temperature_2m_min,uv_index_max,weather_code&timezone=auto`
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${location.latitude}&longitude=${location.longitude}&current=temperature_2m,weather_code&daily=temperature_2m_max,temperature_2m_min,uv_index_max,weather_code&temperature_unit=celsius&timezone=auto`
 
     const req = new Request(url)
     req.timeoutInterval = 10
