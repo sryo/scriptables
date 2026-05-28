@@ -67,39 +67,49 @@ function timeout(ms) {
   )
 }
 
+function describeCondition(code) {
+  return WEATHER_CODES[code] || "mixed conditions"
+}
+
 async function getWeather() {
   if (!userConfig.showWeather) return null
 
   try {
-    // Get location with 10 second timeout (widgets need more time)
     const location = await Promise.race([
       Location.current(),
       timeout(10000)
     ])
 
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${location.latitude}&longitude=${location.longitude}&current=temperature_2m,weather_code&daily=temperature_2m_max,temperature_2m_min,uv_index_max&timezone=auto`
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${location.latitude}&longitude=${location.longitude}&current=temperature_2m,weather_code&daily=temperature_2m_max,temperature_2m_min,uv_index_max,weather_code&timezone=auto`
 
     const req = new Request(url)
-    req.timeoutInterval = 10 // 10 second timeout for API
+    req.timeoutInterval = 10
 
     const data = await req.loadJSON()
 
     if (!data.current) return null
 
     const uvIndex = Math.round(data.daily.uv_index_max[0])
-    const uvInfo = describeUV(uvIndex)
 
     return {
-      temp: Math.round(data.current.temperature_2m),
-      high: Math.round(data.daily.temperature_2m_max[0]),
-      low: Math.round(data.daily.temperature_2m_min[0]),
-      condition: WEATHER_CODES[data.current.weather_code] || "mixed conditions",
-      uv: uvIndex,
-      uvLevel: uvInfo.level,
-      uvAdvice: uvInfo.advice
+      current: {
+        temp: Math.round(data.current.temperature_2m),
+        condition: describeCondition(data.current.weather_code)
+      },
+      today: {
+        high: Math.round(data.daily.temperature_2m_max[0]),
+        low: Math.round(data.daily.temperature_2m_min[0]),
+        condition: describeCondition(data.daily.weather_code[0]),
+        uv: uvIndex,
+        uvLevel: describeUV(uvIndex).level
+      },
+      tomorrow: data.daily.temperature_2m_max.length > 1 ? {
+        high: Math.round(data.daily.temperature_2m_max[1]),
+        low: Math.round(data.daily.temperature_2m_min[1]),
+        condition: describeCondition(data.daily.weather_code[1])
+      } : null
     }
   } catch (e) {
-    // Silently fail - weather is optional
     return null
   }
 }
@@ -171,11 +181,10 @@ function getNextUpcoming(events, reminders) {
 function describeWeather(weather) {
   if (!weather) return null
 
-  // Condensed format: "72° clear skies · UV 7"
-  let text = `${weather.temp}° ${weather.condition}`
+  let text = `${weather.current.temp}° ${weather.current.condition}`
 
-  if (weather.uv > 2) {
-    text += ` · UV ${weather.uv}`
+  if (weather.today.uv > 2) {
+    text += ` · UV ${weather.today.uv}`
   }
 
   return text
