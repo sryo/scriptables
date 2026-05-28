@@ -11,7 +11,10 @@
  * - Sort method selection
  */
 
-const ZenCore = importModule("lib/ZenCore")
+const Theme = importModule("lib/theme")
+const Widget = importModule("lib/widget")
+const Validate = importModule("lib/validate")
+const UI = importModule("lib/ui")
 const ZenTrateConfig = importModule("config/zentrate")
 
 // ============================================
@@ -31,8 +34,8 @@ const saveConfig = ZenTrateConfig.saveConfig
  * @returns {ListWidget}
  */
 function createEditableWidget(config) {
-  const themeConfig = ZenCore.loadTheme()
-  const widget = ZenCore.createWidget({ theme: themeConfig })
+  const themeConfig = Theme.loadTheme()
+  const widget = Widget.createWidget({ theme: themeConfig })
 
   const mainStack = widget.addStack()
   mainStack.layoutHorizontally()
@@ -49,14 +52,14 @@ function createEditableWidget(config) {
     for (const item of columnItems) {
       const itemStack = columnStack.addStack()
       const itemText = itemStack.addText(item.name)
-      itemText.font = ZenCore.getFont(14, { theme: themeConfig })
-      itemText.textColor = ZenCore.getTextColor(themeConfig)
+      itemText.font = Theme.getFont(14, { theme: themeConfig })
+      itemText.textColor = Theme.getTextColor(themeConfig)
       itemText.lineLimit = 1
 
       itemStack.setPadding(5, 5, 5, 5)
       itemStack.backgroundColor = new Color("#444444")
       itemStack.cornerRadius = 5
-      itemStack.url = ZenCore.buildActionURL(Script.name(), {
+      itemStack.url = Widget.buildActionURL(Script.name(), {
         action: 'editItem',
         itemName: item.name
       })
@@ -66,12 +69,12 @@ function createEditableWidget(config) {
     if (columnItems.length > 0) {
       const moveAllStack = columnStack.addStack()
       const moveAllText = moveAllStack.addText("Move All")
-      moveAllText.font = ZenCore.getFont(12, { theme: themeConfig })
-      moveAllText.textColor = ZenCore.getTextColor(themeConfig)
+      moveAllText.font = Theme.getFont(12, { theme: themeConfig })
+      moveAllText.textColor = Theme.getTextColor(themeConfig)
       moveAllStack.backgroundColor = new Color("#666666")
       moveAllStack.cornerRadius = 5
       moveAllStack.setPadding(5, 5, 5, 5)
-      moveAllStack.url = ZenCore.buildActionURL(Script.name(), {
+      moveAllStack.url = Widget.buildActionURL(Script.name(), {
         action: 'moveItems',
         fromColumn: column
       })
@@ -79,9 +82,9 @@ function createEditableWidget(config) {
 
     // Add button
     const addButton = columnStack.addText("+")
-    addButton.font = ZenCore.getFont(20, { theme: themeConfig })
-    addButton.textColor = ZenCore.getTextColor(themeConfig)
-    addButton.url = ZenCore.buildActionURL(Script.name(), {
+    addButton.font = Theme.getFont(20, { theme: themeConfig })
+    addButton.textColor = Theme.getTextColor(themeConfig)
+    addButton.url = Widget.buildActionURL(Script.name(), {
       action: 'addItem',
       column: column
     })
@@ -116,7 +119,7 @@ async function editItem(itemName) {
   const item = config.items.find(i => i.name === itemName)
 
   if (!item) {
-    await ZenCore.showError("Error", "Item not found")
+    await UI.showError("Error", "Item not found")
     return
   }
 
@@ -189,7 +192,7 @@ async function addItem(column) {
     const scheme = alert.textFieldValue(1).trim()
 
     if (!name) {
-      await ZenCore.showError("Error", "Name is required")
+      await UI.showError("Error", "Name is required")
       await showEditableWidget()
       return
     }
@@ -292,12 +295,12 @@ async function setTimeConstraints(item) {
 
   if (response === 0) {
     try {
-      item.startTime = ZenCore.validateTime(alert.textFieldValue(0))
-      item.endTime = ZenCore.validateTime(alert.textFieldValue(1))
-      item.startDay = ZenCore.validateDay(alert.textFieldValue(2))
-      item.endDay = ZenCore.validateDay(alert.textFieldValue(3))
+      item.startTime = Validate.validateTime(alert.textFieldValue(0))
+      item.endTime = Validate.validateTime(alert.textFieldValue(1))
+      item.startDay = Validate.validateDay(alert.textFieldValue(2))
+      item.endDay = Validate.validateDay(alert.textFieldValue(3))
     } catch (error) {
-      await ZenCore.showError("Validation Error", error.message)
+      await UI.showError("Validation Error", error.message)
       return setTimeConstraints(item) // Retry
     }
   } else if (response === 1) {
@@ -367,7 +370,7 @@ async function showMainMenu() {
  * Main execution handler
  */
 async function run() {
-  const params = ZenCore.getActionParams()
+  const params = Widget.getActionParams()
 
   if (params.action) {
     switch (params.action) {
@@ -397,7 +400,7 @@ async function run() {
 // WIDGET MODE
 // ============================================
 
-if (ZenCore.isWidget()) {
+if (Widget.isWidget()) {
   const config = loadConfig()
   const widget = createEditableWidget(config)
   Script.setWidget(widget)

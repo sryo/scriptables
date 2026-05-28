@@ -10,14 +10,16 @@
  * - Configurable event count and widget URL
  */
 
-const ZenCore = importModule("lib/ZenCore")
+const Theme = importModule("lib/theme")
+const Widget = importModule("lib/widget")
+const Calendar_ = importModule("lib/calendar")
 const ZenLendarConfig = importModule("config/zenlendar")
 
 // ============================================
 // CONFIGURATION
 // ============================================
 
-const themeConfig = ZenCore.loadTheme()
+const themeConfig = Theme.loadTheme()
 let userConfig = ZenLendarConfig.loadConfig()
 
 // ============================================
@@ -133,19 +135,19 @@ async function presentConfigAlert() {
  * @returns {Promise<ListWidget>}
  */
 async function createWidget() {
-  const widget = ZenCore.createWidget({
+  const widget = Widget.createWidget({
     url: userConfig.widgetUrl,
     refreshMinutes: 1,
     padding: [0, 16, 0, 16],
     theme: themeConfig
   })
 
-  const events = await ZenCore.getUpcomingEvents(userConfig.eventCount, 365)
+  const events = await Calendar_.getUpcomingEvents(userConfig.eventCount, 365)
 
   if (events.length === 0) {
     const emptyText = widget.addText("No upcoming events")
-    emptyText.textColor = ZenCore.getTextColor(themeConfig)
-    emptyText.font = ZenCore.getFont(themeConfig.minFontSize, { theme: themeConfig })
+    emptyText.textColor = Theme.getTextColor(themeConfig)
+    emptyText.font = Theme.getFont(themeConfig.minFontSize, { theme: themeConfig })
     return widget
   }
 
@@ -156,15 +158,15 @@ async function createWidget() {
     const fontSize = getFontSize(index)
 
     const titleText = eventStack.addText(event.title)
-    titleText.textColor = ZenCore.getTextColor(themeConfig)
-    titleText.font = ZenCore.getFont(fontSize * 0.75, { theme: themeConfig })
+    titleText.textColor = Theme.getTextColor(themeConfig)
+    titleText.font = Theme.getFont(fontSize * 0.75, { theme: themeConfig })
     titleText.lineLimit = 1
 
     eventStack.addSpacer()
 
     const timeText = eventStack.addText(formatRelativeTime(event))
-    timeText.textColor = ZenCore.getTextColor(themeConfig)
-    timeText.font = ZenCore.getFont(fontSize * 0.75, { theme: themeConfig })
+    timeText.textColor = Theme.getTextColor(themeConfig)
+    timeText.font = Theme.getFont(fontSize * 0.75, { theme: themeConfig })
     timeText.lineLimit = 1
 
     if (index < events.length - 1) {
@@ -180,9 +182,9 @@ async function createWidget() {
 // ============================================
 
 async function run() {
-  if (ZenCore.isApp()) {
+  if (Widget.isApp()) {
     await presentConfigAlert()
-  } else if (ZenCore.isWidget()) {
+  } else if (Widget.isWidget()) {
     const widget = await createWidget()
     Script.setWidget(widget)
   }

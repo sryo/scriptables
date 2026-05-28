@@ -11,14 +11,16 @@
  * - Multiple sort modes (manual, alphabetical, usage)
  */
 
-const ZenCore = importModule("lib/ZenCore")
+const Theme = importModule("lib/theme")
+const Widget = importModule("lib/widget")
+const DateTime = importModule("lib/datetime")
 const ZenTrateConfig = importModule("config/zentrate")
 
 // ============================================
 // CONFIGURATION
 // ============================================
 
-const themeConfig = ZenCore.loadTheme()
+const themeConfig = Theme.loadTheme()
 const appConfig = ZenTrateConfig.loadConfig()
 const usageStats = ZenTrateConfig.loadStats()
 const sortMethod = appConfig.sortMethod || "manual"
@@ -33,8 +35,8 @@ const sortMethod = appConfig.sortMethod || "manual"
  * @returns {boolean} True if item should be shown
  */
 function shouldDisplayItem(item) {
-  return ZenCore.isWithinTimeRange(item.startTime, item.endTime) &&
-         ZenCore.isWithinDayRange(item.startDay, item.endDay)
+  return DateTime.isWithinTimeRange(item.startTime, item.endTime) &&
+         DateTime.isWithinDayRange(item.startDay, item.endDay)
 }
 
 /**
@@ -126,13 +128,13 @@ function addItemToRow(rowStack, item) {
   textStack.setPadding(padding.top, padding.left, padding.bottom, padding.right)
 
   const itemText = textStack.addText(item.name)
-  itemText.font = ZenCore.getFont(fontSize, { theme: themeConfig })
-  itemText.textColor = ZenCore.getTextColor(themeConfig)
+  itemText.font = Theme.getFont(fontSize, { theme: themeConfig })
+  itemText.textColor = Theme.getTextColor(themeConfig)
   itemText.minimumScaleFactor = 0.5
   itemText.lineLimit = 1
 
   // URL for tracking usage and launching
-  itemStack.url = ZenCore.buildActionURL(Script.name(), {
+  itemStack.url = Widget.buildActionURL(Script.name(), {
     shortcut: item.name,
     originalUrl: item.scheme
   })
@@ -143,7 +145,7 @@ function addItemToRow(rowStack, item) {
  * @returns {ListWidget}
  */
 function createWidget() {
-  const widget = ZenCore.createWidget({
+  const widget = Widget.createWidget({
     padding: [0, 16, 0, 16],
     theme: themeConfig
   })
@@ -202,7 +204,7 @@ function createWidget() {
 // MAIN EXECUTION
 // ============================================
 
-const params = ZenCore.getActionParams()
+const params = Widget.getActionParams()
 
 if (params.shortcut) {
   // Handle item tap - update stats and open URL
@@ -214,7 +216,7 @@ if (params.shortcut) {
 } else {
   // Display widget
   const widget = createWidget()
-  if (ZenCore.isWidget()) {
+  if (Widget.isWidget()) {
     Script.setWidget(widget)
   } else {
     widget.presentLarge()

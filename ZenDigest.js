@@ -8,14 +8,16 @@
  * Like a thoughtful friend catching you up.
  */
 
-const ZenCore = importModule("lib/ZenCore")
+const Theme = importModule("lib/theme")
+const Widget = importModule("lib/widget")
+const DateTime = importModule("lib/datetime")
 const ZenDigestConfig = importModule("config/zendigest")
 
 // ============================================
 // CONFIGURATION
 // ============================================
 
-const themeConfig = ZenCore.loadTheme()
+const themeConfig = Theme.loadTheme()
 let userConfig = ZenDigestConfig.loadConfig()
 
 // ============================================
@@ -205,7 +207,7 @@ function pluralize(count, singular, plural) {
 }
 
 function describeGreeting(nextItem) {
-  const greeting = ZenCore.getGreeting()
+  const greeting = DateTime.getGreeting()
 
   if (nextItem) {
     const timeUntil = formatTimeUntil(nextItem.startDate)
@@ -314,7 +316,7 @@ function describeBirthdays(birthdays) {
 // ============================================
 
 async function createWidget() {
-  const widget = ZenCore.createWidget({
+  const widget = Widget.createWidget({
     refreshMinutes: 15,
     padding: [12, 16, 12, 16],
     theme: themeConfig
@@ -349,8 +351,8 @@ async function createWidget() {
   const greetingStack = mainStack.addStack()
   greetingStack.url = "calshow://"
   const greetingEl = greetingStack.addText(greetingText)
-  greetingEl.textColor = ZenCore.getTextColor(themeConfig)
-  greetingEl.font = ZenCore.getBoldFont(themeConfig.maxFontSize - 2, themeConfig)
+  greetingEl.textColor = Theme.getTextColor(themeConfig)
+  greetingEl.font = Theme.getBoldFont(themeConfig.maxFontSize - 2, themeConfig)
   greetingEl.minimumScaleFactor = 0.8
   greetingStack.addSpacer()
 
@@ -361,8 +363,8 @@ async function createWidget() {
     const weatherStack = mainStack.addStack()
     weatherStack.url = "weather://"
     const weatherEl = weatherStack.addText(weatherLine)
-    weatherEl.textColor = ZenCore.getTextColor(themeConfig)
-    weatherEl.font = ZenCore.getMediumFont(themeConfig.minFontSize + 4, themeConfig)
+    weatherEl.textColor = Theme.getTextColor(themeConfig)
+    weatherEl.font = Theme.getMediumFont(themeConfig.minFontSize + 4, themeConfig)
     weatherEl.minimumScaleFactor = 0.8
     weatherStack.addSpacer()
 
@@ -374,8 +376,8 @@ async function createWidget() {
     const calStack = mainStack.addStack()
     calStack.url = "calshow://"
     const calEl = calStack.addText(calendarParts.join(" "))
-    calEl.textColor = ZenCore.getTextColor(themeConfig)
-    calEl.font = ZenCore.getRegularFont(themeConfig.minFontSize + 2, themeConfig)
+    calEl.textColor = Theme.getTextColor(themeConfig)
+    calEl.font = Theme.getRegularFont(themeConfig.minFontSize + 2, themeConfig)
     calEl.minimumScaleFactor = 0.7
     calStack.addSpacer()
   }
@@ -412,9 +414,9 @@ async function presentConfigAlert() {
 // ============================================
 
 async function run() {
-  if (ZenCore.isApp()) {
+  if (Widget.isApp()) {
     await presentConfigAlert()
-  } else if (ZenCore.isWidget()) {
+  } else if (Widget.isWidget()) {
     const widget = await createWidget()
     Script.setWidget(widget)
   }

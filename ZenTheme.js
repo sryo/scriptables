@@ -10,7 +10,10 @@
  * - Edit theme properties (colors, fonts, sizes)
  */
 
-const ZenCore = importModule("lib/ZenCore")
+const Theme = importModule("lib/theme")
+const Widget = importModule("lib/widget")
+const Validate = importModule("lib/validate")
+const UI = importModule("lib/ui")
 
 // ============================================
 // INITIALIZATION
@@ -20,9 +23,9 @@ const ZenCore = importModule("lib/ZenCore")
  * Ensures themes folder exists with default theme
  */
 function ensureThemesFolder() {
-  const themes = ZenCore.loadAllThemes()
+  const themes = Theme.loadAllThemes()
   if (themes.length === 0) {
-    ZenCore.saveThemeToFolder(ZenCore.DEFAULT_THEME, "noir.json")
+    Theme.saveThemeToFolder(Theme.DEFAULT_THEME, "noir.json")
   }
 }
 
@@ -35,7 +38,7 @@ function ensureThemesFolder() {
  * @returns {Promise<boolean>} True if a theme was selected/created
  */
 async function showThemePicker() {
-  const themes = ZenCore.loadAllThemes()
+  const themes = Theme.loadAllThemes()
   const alert = new Alert()
   alert.title = "ZenTheme"
   alert.message = "Pick or create a new theme"
@@ -52,8 +55,8 @@ async function showThemePicker() {
   if (response === themes.length) {
     return showConfigurationUI()
   } else if (response !== -1) {
-    ZenCore.saveTheme(themes[response])
-    await ZenCore.showSuccess("Theme Applied", `"${themes[response].name}" is now active.`)
+    Theme.saveTheme(themes[response])
+    await UI.showSuccess("Theme Applied", `"${themes[response].name}" is now active.`)
     return true
   }
 
@@ -91,11 +94,11 @@ function validateTheme(theme) {
     errors.push("Theme name is required")
   }
 
-  if (!ZenCore.validateHexColor(theme.bgColor)) {
+  if (!Validate.validateHexColor(theme.bgColor)) {
     errors.push("Invalid background color (use 6-digit hex, e.g., 000000)")
   }
 
-  if (!ZenCore.validateHexColor(theme.textColor)) {
+  if (!Validate.validateHexColor(theme.textColor)) {
     errors.push("Invalid text color (use 6-digit hex, e.g., FFFFFF)")
   }
 
@@ -122,7 +125,7 @@ function validateTheme(theme) {
  * @returns {Promise<boolean>} True if theme was saved
  */
 async function showConfigurationUI() {
-  const currentTheme = ZenCore.loadTheme()
+  const currentTheme = Theme.loadTheme()
   const alert = new Alert()
   alert.title = "New Theme"
 
@@ -152,22 +155,22 @@ async function showConfigurationUI() {
     // Validate theme
     const validation = validateTheme(newTheme)
     if (!validation.valid) {
-      await ZenCore.showError("Validation Error", validation.errors.join("\n"))
+      await UI.showError("Validation Error", validation.errors.join("\n"))
       return showConfigurationUI() // Retry
     }
 
     // Clean hex colors (remove # if present)
-    newTheme.bgColor = ZenCore.validateHexColor(newTheme.bgColor)
-    newTheme.textColor = ZenCore.validateHexColor(newTheme.textColor)
+    newTheme.bgColor = Validate.validateHexColor(newTheme.bgColor)
+    newTheme.textColor = Validate.validateHexColor(newTheme.textColor)
 
     // Generate filename
     const filename = `${newTheme.name.toLowerCase().replace(/\s+/g, '-')}.json`
 
     // Save as current theme and to folder
-    ZenCore.saveTheme(newTheme)
-    ZenCore.saveThemeToFolder(newTheme, filename)
+    Theme.saveTheme(newTheme)
+    Theme.saveThemeToFolder(newTheme, filename)
 
-    await ZenCore.showSuccess(
+    await UI.showSuccess(
       "Theme Saved",
       `Your theme "${newTheme.name}" has been saved and is available in the ZenThemes folder as "${filename}".`
     )
@@ -188,6 +191,6 @@ async function run() {
   Script.complete()
 }
 
-if (ZenCore.isApp()) {
+if (Widget.isApp()) {
   await run()
 }
