@@ -121,208 +121,120 @@ async function getWeather() {
 const ZenCalendar = importModule("lib/calendar")
 
 // ============================================
-// CATEGORIZATION
+// MODE PICKER
 // ============================================
 
-function categorizeEvents(events) {
-  const now = new Date()
+// Mode is driven by today's calendar shape, not raw clock time:
+//   morning   — now is before the earliest timed event of the day
+//   afternoon — at least one timed event has started but the day's
+//               last timed event has not yet ended
+//   evening   — the day's last timed event has ended (or empty calendar
+//               and past 21:00)
+// All-day events are ignored for mode selection (they don't define a
+// "start" or "end" to the timed day) but still appear in the digest.
+function pickMode(now, todayEvents) {
+  const timed = todayEvents.filter(e => !e.isAllDay)
 
-  const birthdays = []
-  const regular = []
-
-  for (const event of events) {
-    const isBirthday = event.title.toLowerCase().includes("birthday") ||
-                       event.title.toLowerCase().includes("cumpleaños")
-
-    const item = {
-      title: event.title,
-      startDate: event.startDate,
-      endDate: event.endDate,
-      isAllDay: event.isAllDay,
-      isPast: event.endDate < now,
-      isNow: now >= event.startDate && now <= event.endDate,
-      isBirthday: isBirthday
-    }
-
-    if (isBirthday) {
-      birthdays.push(item)
-    } else {
-      regular.push(item)
-    }
+  if (timed.length === 0) {
+    const hour = now.getHours()
+    if (hour < 12) return 'morning'
+    if (hour < 21) return 'afternoon'
+    return 'evening'
   }
 
-  return { birthdays, events: regular }
-}
+  const earliestStart = Math.min(...timed.map(e => e.startDate.getTime()))
+  const latestEnd = Math.max(...timed.map(e => e.endDate.getTime()))
+  const t = now.getTime()
 
-function getNextUpcoming(events, reminders) {
-  const now = new Date()
-
-  // Get upcoming events (not all-day, not past)
-  const upcomingEvents = events
-    .filter(e => !e.isAllDay && !e.isPast && !e.isNow)
-    .map(e => ({ ...e, type: 'event' }))
-
-  // Get upcoming reminders with time
-  const upcomingReminders = reminders
-    .filter(r => r.dueDate && r.dueDateIncludesTime && r.dueDate > now)
-    .map(r => ({ title: r.title, startDate: r.dueDate, type: 'reminder' }))
-
-  // Combine and sort
-  const all = [...upcomingEvents, ...upcomingReminders]
-  all.sort((a, b) => a.startDate - b.startDate)
-
-  return all.length > 0 ? all[0] : null
+  if (t < earliestStart) return 'morning'
+  if (t < latestEnd) return 'afternoon'
+  return 'evening'
 }
 
 // ============================================
-// NATURAL LANGUAGE GENERATION
+// FORMATTING
 // ============================================
 
-function describeWeather(weather) {
-  if (!weather) return null
+const timeFormatter = new DateFormatter()
+timeFormatter.useShortTimeStyle()
 
-  let text = `${weather.current.temp}° ${weather.current.condition}`
-
-  if (weather.today.uv > 2) {
-    text += ` · UV ${weather.today.uv}`
-  }
-
-  return text
+// Locale-aware time, with a trailing ":00" stripped so morning hours
+// render as "9" instead of "9:00" (and "9 AM" instead of "9:00 AM").
+function formatTime(date) {
+  return timeFormatter.string(date).replace(/(\d):00(\s?[AP]M)?$/i, '$1$2')
 }
 
-function formatTimeUntil(date) {
-  const now = new Date()
-  const diff = date.getTime() - now.getTime()
-  const minutes = Math.floor(diff / (1000 * 60))
-
-  if (minutes <= 0) return "now"
-  if (minutes === 1) return "in 1 minute"
-  if (minutes < 60) return `in ${minutes} minutes`
-
-  const hours = Math.floor(minutes / 60)
-  const remainingMins = minutes % 60
-
-  if (hours === 1) {
-    if (remainingMins === 0) return "in 1 hour"
-    return `in 1 hour and ${remainingMins} minutes`
-  }
-
-  if (remainingMins === 0) return `in ${hours} hours`
-  return `in ${hours} hours and ${remainingMins} minutes`
+function emptyDigestForMode(mode) {
+  if (mode === 'morning') return "Your day is wide open."
+  if (mode === 'afternoon') return "The rest of the day is yours."
+  return "Nothing scheduled tomorrow."
 }
 
-function pluralize(count, singular, plural) {
-  return count === 1 ? `${count} ${singular}` : `${count} ${plural}`
-}
+function formatEventDigest(events, mode, { capItems = 4 } = {}) {
+  if (events.length === 0) return emptyDigestForMode(mode)
 
-function describeGreeting(nextItem) {
-  const greeting = DateTime.getGreeting()
-
-  if (nextItem) {
-    const timeUntil = formatTimeUntil(nextItem.startDate)
-    return `${greeting} — ${timeUntil}`
-  }
-
-  return `${greeting}!`
-}
-
-function describeSummary(birthdays, events, reminders) {
-  const now = new Date()
-
-  // Filter to non-past items for counting
-  const upcomingEvents = events.filter(e => !e.isPast)
-  const currentEvents = events.filter(e => e.isNow)
+  const allDay = events.filter(e => e.isAllDay)
+  const timed = events.filter(e => !e.isAllDay)
+                      .sort((a, b) => a.startDate - b.startDate)
 
   const parts = []
-
-  // Currently happening
-  if (currentEvents.length > 0) {
-    if (currentEvents.length === 1) {
-      parts.push(`In "${currentEvents[0].title}" now.`)
-    } else {
-      parts.push(`${currentEvents.length} things happening now.`)
-    }
+  if (allDay.length > 0) {
+    parts.push(`All day: ${allDay.map(e => e.title).join(", ")}.`)
   }
 
-  // Build condensed counts: "2 events · 1 reminder"
-  const counts = []
-
-  if (birthdays.length > 0) {
-    counts.push(pluralize(birthdays.length, "birthday", "birthdays"))
+  if (timed.length > 0) {
+    const shown = timed.slice(0, capItems)
+    const overflow = timed.length - shown.length
+    let clause = shown.map(e => `${e.title} at ${formatTime(e.startDate)}`).join(", ")
+    clause += overflow > 0 ? `, and ${overflow} more.` : "."
+    parts.push(clause)
   }
 
-  if (upcomingEvents.length > 0) {
-    counts.push(pluralize(upcomingEvents.length, "event", "events"))
-  }
-
-  if (reminders.length > 0) {
-    counts.push(pluralize(reminders.length, "reminder", "reminders"))
-  }
-
-  if (counts.length > 0) {
-    parts.push(counts.join(" · ") + " today.")
-  }
-
-  // Empty day
-  if (counts.length === 0 && currentEvents.length === 0) {
-    const hour = now.getHours()
-    let emptyMessages
-
-    if (hour < 12) {
-      emptyMessages = [
-        "Your day is wide open.",
-        "Nothing scheduled.",
-        "A clear day ahead.",
-        "No plans today."
-      ]
-    } else if (hour < 17) {
-      emptyMessages = [
-        "Nothing else scheduled.",
-        "The rest of the day is yours.",
-        "No more plans today.",
-        "Your afternoon is free."
-      ]
-    } else {
-      emptyMessages = [
-        "Nothing left for today.",
-        "Your evening is free.",
-        "No more plans tonight.",
-        "The rest of the night is yours."
-      ]
-    }
-    parts.push(emptyMessages[Math.floor(Math.random() * emptyMessages.length)])
-  }
-
-  return parts.join(" ")
+  const built = parts.join(" ")
+  return mode === 'evening' ? `Tomorrow: ${built}` : built
 }
 
-function describeBirthdays(birthdays) {
-  if (birthdays.length === 0) return null
+function formatWeatherLine(weather, mode) {
+  if (!weather) return null
 
-  // Extract names
-  const names = birthdays.map(b => {
-    return b.title
-      .replace(/('s)?\s*(birthday|cumpleaños)/gi, '')
-      .replace(/\s+/g, ' ')
-      .trim()
-  }).filter(n => n.length > 0)
-
-  if (names.length === 0) return null
-
-  if (names.length === 1) {
-    return `It's ${names[0]}'s birthday!`
+  if (mode === 'evening') {
+    const t = weather.tomorrow
+    if (!t) return null
+    return `Tomorrow: ${t.condition} · ↑${t.high} ↓${t.low}`
   }
 
-  if (names.length === 2) {
-    return `${names[0]} and ${names[1]} have birthdays today!`
+  if (mode === 'morning') {
+    const c = weather.current
+    const d = weather.today
+    let line = `${c.temp}° ${c.condition} · ↑${d.high} ↓${d.low}`
+    if (d.uv > 2) line += ` · UV ${d.uv}`
+    return line
   }
 
-  return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]} have birthdays!`
+  // afternoon
+  return `${weather.current.temp}° ${weather.current.condition}`
+}
+
+function formatRemindersLine(reminders, mode) {
+  if (mode === 'evening' || !reminders || reminders.length === 0) return null
+  const n = reminders.length
+  const noun = n === 1 ? "reminder" : "reminders"
+  return mode === 'morning' ? `${n} ${noun} today.` : `${n} ${noun} pending.`
 }
 
 // ============================================
 // WIDGET CREATION
 // ============================================
+
+function addLine(stack, text, font, url) {
+  const row = stack.addStack()
+  if (url) row.url = url
+  const el = row.addText(text)
+  el.textColor = Theme.getTextColor(themeConfig)
+  el.font = font
+  el.minimumScaleFactor = 0.7
+  row.addSpacer()
+}
 
 async function createWidget() {
   const widget = Widget.createWidget({
@@ -331,64 +243,51 @@ async function createWidget() {
     theme: themeConfig
   })
 
-  // Fetch data
-  const [rawEvents, reminders, weather] = await Promise.all([
+  const now = new Date()
+
+  const [todayEvents, todayReminders, tomorrowEvents, weather] = await Promise.all([
     ZenCalendar.getTodayEvents(),
     ZenCalendar.getTodayReminders(),
+    ZenCalendar.getTomorrowEvents(),
     getWeather()
   ])
 
-  // Categorize
-  const { birthdays, events } = categorizeEvents(rawEvents)
-  const nextItem = getNextUpcoming(events, reminders)
+  const mode = pickMode(now, todayEvents)
 
-  // Build content parts
-  const greetingText = describeGreeting(nextItem)
-  const weatherLine = describeWeather(weather)
+  let eventsForDigest
+  let remindersForLine
+  if (mode === 'morning') {
+    eventsForDigest = todayEvents
+    remindersForLine = todayReminders
+  } else if (mode === 'afternoon') {
+    eventsForDigest = todayEvents.filter(e => e.isAllDay || e.endDate > now)
+    remindersForLine = todayReminders.filter(r => !r.dueDate || r.dueDate > now)
+  } else {
+    eventsForDigest = tomorrowEvents
+    remindersForLine = []
+  }
 
-  const calendarParts = []
-  const birthdayLine = describeBirthdays(birthdays)
-  if (birthdayLine) calendarParts.push(birthdayLine)
-  const summaryLine = describeSummary(birthdays, events, reminders)
-  if (summaryLine) calendarParts.push(summaryLine)
+  const greeting = DateTime.getGreeting()
+  const weatherLine = formatWeatherLine(weather, mode)
+  const digestLine = formatEventDigest(eventsForDigest, mode)
+  const remindersLine = formatRemindersLine(remindersForLine, mode)
 
   const mainStack = widget.addStack()
   mainStack.layoutVertically()
-  mainStack.centerAlignContent()
 
-  // Greeting + next up (opens calendar) - Large, bold, primary anchor
-  const greetingStack = mainStack.addStack()
-  greetingStack.url = "calshow://"
-  const greetingEl = greetingStack.addText(greetingText)
-  greetingEl.textColor = Theme.getTextColor(themeConfig)
-  greetingEl.font = Theme.getBoldFont(themeConfig.maxFontSize - 2, themeConfig)
-  greetingEl.minimumScaleFactor = 0.8
-  greetingStack.addSpacer()
-
+  addLine(mainStack, greeting, Theme.getBoldFont(themeConfig.maxFontSize - 2, themeConfig), "calshow://")
   mainStack.addSpacer(6)
 
-  // Weather section (opens weather app) - Medium size and weight
   if (weatherLine) {
-    const weatherStack = mainStack.addStack()
-    weatherStack.url = "weather://"
-    const weatherEl = weatherStack.addText(weatherLine)
-    weatherEl.textColor = Theme.getTextColor(themeConfig)
-    weatherEl.font = Theme.getMediumFont(themeConfig.minFontSize + 4, themeConfig)
-    weatherEl.minimumScaleFactor = 0.8
-    weatherStack.addSpacer()
-
+    addLine(mainStack, weatherLine, Theme.getMediumFont(themeConfig.minFontSize + 4, themeConfig), "weather://")
     mainStack.addSpacer(4)
   }
 
-  // Calendar section (opens calendar app) - Regular weight, detail content
-  if (calendarParts.length > 0) {
-    const calStack = mainStack.addStack()
-    calStack.url = "calshow://"
-    const calEl = calStack.addText(calendarParts.join(" "))
-    calEl.textColor = Theme.getTextColor(themeConfig)
-    calEl.font = Theme.getRegularFont(themeConfig.minFontSize + 2, themeConfig)
-    calEl.minimumScaleFactor = 0.7
-    calStack.addSpacer()
+  addLine(mainStack, digestLine, Theme.getRegularFont(themeConfig.minFontSize + 2, themeConfig), "calshow://")
+
+  if (remindersLine) {
+    mainStack.addSpacer(2)
+    addLine(mainStack, remindersLine, Theme.getRegularFont(themeConfig.minFontSize, themeConfig))
   }
 
   return widget
