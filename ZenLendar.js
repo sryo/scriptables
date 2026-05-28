@@ -10,17 +10,28 @@
  * - Configurable event count and widget URL
  */
 
+const Fs = importModule("lib/fs")
 const Theme = importModule("lib/theme")
 const Widget = importModule("lib/widget")
 const Calendar_ = importModule("lib/calendar")
-const ZenLendarConfig = importModule("config/zenlendar")
 
 // ============================================
 // CONFIGURATION
 // ============================================
 
+const CONFIG_PATH = Fs.fm.joinPath(Fs.baseDir, "zenlendar_config.json")
+const DEFAULTS = { eventCount: 5, widgetUrl: "calshow://" }
+
+function loadConfig() {
+  return { ...DEFAULTS, ...Fs.loadJSON(CONFIG_PATH, {}) }
+}
+
+function saveConfig(config) {
+  Fs.saveJSON(CONFIG_PATH, config)
+}
+
 const themeConfig = Theme.loadTheme()
-let userConfig = ZenLendarConfig.loadConfig()
+let userConfig = loadConfig()
 
 // ============================================
 // FONT SIZE CALCULATION
@@ -121,7 +132,7 @@ async function presentConfigAlert() {
 
   userConfig.eventCount = count
   userConfig.widgetUrl = url
-  ZenLendarConfig.saveConfig(userConfig)
+  saveConfig(userConfig)
 
   return userConfig
 }

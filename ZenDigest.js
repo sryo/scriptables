@@ -8,17 +8,28 @@
  * Like a thoughtful friend catching you up.
  */
 
+const Fs = importModule("lib/fs")
 const Theme = importModule("lib/theme")
 const Widget = importModule("lib/widget")
 const DateTime = importModule("lib/datetime")
-const ZenDigestConfig = importModule("config/zendigest")
 
 // ============================================
 // CONFIGURATION
 // ============================================
 
+const CONFIG_PATH = Fs.fm.joinPath(Fs.baseDir, "zendigest_config.json")
+const DEFAULTS = { widgetUrl: "calshow://", showWeather: true }
+
+function loadConfig() {
+  return { ...DEFAULTS, ...Fs.loadJSON(CONFIG_PATH, {}) }
+}
+
+function saveConfig(config) {
+  Fs.saveJSON(CONFIG_PATH, config)
+}
+
 const themeConfig = Theme.loadTheme()
-let userConfig = ZenDigestConfig.loadConfig()
+let userConfig = loadConfig()
 
 // ============================================
 // WEATHER
@@ -48,19 +59,6 @@ const WEATHER_CODES = {
   99: "severe storms"
 }
 
-function describeUV(uv) {
-  if (uv <= 2) return { level: "low", advice: null }
-  if (uv <= 5) return { level: "moderate", advice: "consider sunscreen" }
-  if (uv <= 7) return { level: "high", advice: "wear sunscreen" }
-  if (uv <= 10) return { level: "very high", advice: "protect yourself" }
-  return { level: "extreme", advice: "avoid the sun" }
-}
-
-/**
- * Creates a promise that rejects after a timeout
- * @param {number} ms - Timeout in milliseconds
- * @returns {Promise} Promise that rejects after timeout
- */
 function timeout(ms) {
   return new Promise((_, reject) =>
     Timer.schedule(ms / 1000, false, () => reject(new Error("Timeout")))
@@ -89,8 +87,6 @@ async function getWeather() {
 
     if (!data.current) return null
 
-    const uvIndex = Math.round(data.daily.uv_index_max[0])
-
     return {
       current: {
         temp: Math.round(data.current.temperature_2m),
@@ -100,8 +96,7 @@ async function getWeather() {
         high: Math.round(data.daily.temperature_2m_max[0]),
         low: Math.round(data.daily.temperature_2m_min[0]),
         condition: describeCondition(data.daily.weather_code[0]),
-        uv: uvIndex,
-        uvLevel: describeUV(uvIndex).level
+        uv: Math.round(data.daily.uv_index_max[0])
       },
       tomorrow: data.daily.temperature_2m_max.length > 1 ? {
         high: Math.round(data.daily.temperature_2m_max[1]),
@@ -133,22 +128,67 @@ const ZenCalendar = importModule("lib/calendar")
 // All-day events are ignored for mode selection (they don't define a
 // "start" or "end" to the timed day) but still appear in the digest.
 function pickMode(now, todayEvents) {
-  const timed = todayEvents.filter(e => !e.isAllDay)
+  let earliestStart = Infinity
+  let latestEnd = -Infinity
+  for (const e of todayEvents) {
+    if (e.isAllDay) continue
+    const start = e.startDate.getTime()
+    const end = e.endDate.getTime()
+    if (start < earliestStart) earliestStart = start
+    if (end > latestEnd) latestEnd = end
+  }
 
-  if (timed.length === 0) {
+  if (!isFinite(earliestStart)) {
     const hour = now.getHours()
     if (hour < 12) return 'morning'
     if (hour < 21) return 'afternoon'
     return 'evening'
   }
 
-  const earliestStart = Math.min(...timed.map(e => e.startDate.getTime()))
-  const latestEnd = Math.max(...timed.map(e => e.endDate.getTime()))
   const t = now.getTime()
-
   if (t < earliestStart) return 'morning'
   if (t < latestEnd) return 'afternoon'
   return 'evening'
+}
+
+// ============================================
+// MODES
+// ============================================
+
+const CAP_ITEMS = 4
+
+const MODES = {
+  morning: {
+    selectEvents: ({ todayEvents }) => todayEvents,
+    selectReminders: ({ todayReminders }) => todayReminders,
+    formatWeather: ({ current, today }) => {
+      let line = `${current.temp}° ${current.condition} · ↑${today.high} ↓${today.low}`
+      if (today.uv > 2) line += ` · UV ${today.uv}`
+      return line
+    },
+    formatReminders: (n) => `${n} ${n === 1 ? 'reminder' : 'reminders'} today.`,
+    emptyDigest: "Your day is wide open.",
+    digestPrefix: ""
+  },
+  afternoon: {
+    selectEvents: ({ todayEvents, now }) =>
+      todayEvents.filter(e => e.isAllDay || e.endDate > now),
+    selectReminders: ({ todayReminders, now }) =>
+      todayReminders.filter(r => !r.dueDate || r.dueDate > now),
+    formatWeather: ({ current }) => `${current.temp}° ${current.condition}`,
+    formatReminders: (n) => `${n} ${n === 1 ? 'reminder' : 'reminders'} pending.`,
+    emptyDigest: "The rest of the day is yours.",
+    digestPrefix: ""
+  },
+  evening: {
+    selectEvents: ({ tomorrowEvents }) => tomorrowEvents,
+    selectReminders: () => [],
+    formatWeather: ({ tomorrow }) =>
+      tomorrow ? `Tomorrow: ${tomorrow.condition} · ↑${tomorrow.high} ↓${tomorrow.low}` : null,
+    formatReminders: () => null,
+    emptyDigest: "Nothing scheduled tomorrow.",
+    digestPrefix: "Tomorrow: "
+  }
 }
 
 // ============================================
@@ -158,24 +198,22 @@ function pickMode(now, todayEvents) {
 const timeFormatter = new DateFormatter()
 timeFormatter.useShortTimeStyle()
 
-// Locale-aware time, with a trailing ":00" stripped so morning hours
-// render as "9" instead of "9:00" (and "9 AM" instead of "9:00 AM").
+// Locale-aware time. Strip a trailing ":00" so hour-only times read as
+// "9" / "9 AM" rather than "9:00" / "9:00 AM". The lookahead ensures we
+// only target the minutes slot (after the hour colon), not other digits.
 function formatTime(date) {
-  return timeFormatter.string(date).replace(/(\d):00(\s?[AP]M)?$/i, '$1$2')
+  return timeFormatter.string(date).replace(/:00(?=\D|$)/, '')
 }
 
-function emptyDigestForMode(mode) {
-  if (mode === 'morning') return "Your day is wide open."
-  if (mode === 'afternoon') return "The rest of the day is yours."
-  return "Nothing scheduled tomorrow."
-}
+function formatEventDigest(events, modeConfig) {
+  if (events.length === 0) return modeConfig.emptyDigest
 
-function formatEventDigest(events, mode, { capItems = 4 } = {}) {
-  if (events.length === 0) return emptyDigestForMode(mode)
-
-  const allDay = events.filter(e => e.isAllDay)
-  const timed = events.filter(e => !e.isAllDay)
-                      .sort((a, b) => a.startDate - b.startDate)
+  const allDay = []
+  const timed = []
+  for (const e of events) {
+    (e.isAllDay ? allDay : timed).push(e)
+  }
+  timed.sort((a, b) => a.startDate - b.startDate)
 
   const parts = []
   if (allDay.length > 0) {
@@ -183,43 +221,14 @@ function formatEventDigest(events, mode, { capItems = 4 } = {}) {
   }
 
   if (timed.length > 0) {
-    const shown = timed.slice(0, capItems)
+    const shown = timed.slice(0, CAP_ITEMS)
     const overflow = timed.length - shown.length
     let clause = shown.map(e => `${e.title} at ${formatTime(e.startDate)}`).join(", ")
     clause += overflow > 0 ? `, and ${overflow} more.` : "."
     parts.push(clause)
   }
 
-  const built = parts.join(" ")
-  return mode === 'evening' ? `Tomorrow: ${built}` : built
-}
-
-function formatWeatherLine(weather, mode) {
-  if (!weather) return null
-
-  if (mode === 'evening') {
-    const t = weather.tomorrow
-    if (!t) return null
-    return `Tomorrow: ${t.condition} · ↑${t.high} ↓${t.low}`
-  }
-
-  if (mode === 'morning') {
-    const c = weather.current
-    const d = weather.today
-    let line = `${c.temp}° ${c.condition} · ↑${d.high} ↓${d.low}`
-    if (d.uv > 2) line += ` · UV ${d.uv}`
-    return line
-  }
-
-  // afternoon
-  return `${weather.current.temp}° ${weather.current.condition}`
-}
-
-function formatRemindersLine(reminders, mode) {
-  if (mode === 'evening' || !reminders || reminders.length === 0) return null
-  const n = reminders.length
-  const noun = n === 1 ? "reminder" : "reminders"
-  return mode === 'morning' ? `${n} ${noun} today.` : `${n} ${noun} pending.`
+  return modeConfig.digestPrefix + parts.join(" ")
 }
 
 // ============================================
@@ -245,37 +254,35 @@ async function createWidget() {
 
   const now = new Date()
 
-  const [todayEvents, todayReminders, tomorrowEvents, weather] = await Promise.all([
+  // Today's events drive mode selection, and weather is independent —
+  // fetch both up front. Tomorrow's events and today's reminders are
+  // mode-gated to avoid two-thirds-of-the-day waste.
+  const [todayEvents, weather] = await Promise.all([
     ZenCalendar.getTodayEvents(),
-    ZenCalendar.getTodayReminders(),
-    ZenCalendar.getTomorrowEvents(),
     getWeather()
   ])
 
   const mode = pickMode(now, todayEvents)
+  const modeConfig = MODES[mode]
 
-  let eventsForDigest
-  let remindersForLine
-  if (mode === 'morning') {
-    eventsForDigest = todayEvents
-    remindersForLine = todayReminders
-  } else if (mode === 'afternoon') {
-    eventsForDigest = todayEvents.filter(e => e.isAllDay || e.endDate > now)
-    remindersForLine = todayReminders.filter(r => !r.dueDate || r.dueDate > now)
-  } else {
-    eventsForDigest = tomorrowEvents
-    remindersForLine = []
-  }
+  const [todayReminders, tomorrowEvents] = mode === 'evening'
+    ? [[], await ZenCalendar.getTomorrowEvents()]
+    : [await ZenCalendar.getTodayReminders(), []]
 
-  const greeting = DateTime.getGreeting()
-  const weatherLine = formatWeatherLine(weather, mode)
-  const digestLine = formatEventDigest(eventsForDigest, mode)
-  const remindersLine = formatRemindersLine(remindersForLine, mode)
+  const inputs = { now, todayEvents, todayReminders, tomorrowEvents }
+  const eventsForDigest = modeConfig.selectEvents(inputs)
+  const remindersForLine = modeConfig.selectReminders(inputs)
+
+  const digestLine = formatEventDigest(eventsForDigest, modeConfig)
+  const weatherLine = weather ? modeConfig.formatWeather(weather) : null
+  const remindersLine = remindersForLine.length > 0
+    ? modeConfig.formatReminders(remindersForLine.length)
+    : null
 
   const mainStack = widget.addStack()
   mainStack.layoutVertically()
 
-  addLine(mainStack, greeting, Theme.getBoldFont(themeConfig.maxFontSize - 2, themeConfig), "calshow://")
+  addLine(mainStack, DateTime.getGreeting(), Theme.getBoldFont(themeConfig.maxFontSize - 2, themeConfig), "calshow://")
   mainStack.addSpacer(6)
 
   if (weatherLine) {
@@ -312,7 +319,7 @@ async function presentConfigAlert() {
 
   userConfig.widgetUrl = alert.textFieldValue(0).trim() || "calshow://"
   userConfig.showWeather = alert.textFieldValue(1).toLowerCase() === 'true'
-  ZenDigestConfig.saveConfig(userConfig)
+  saveConfig(userConfig)
 
   return userConfig
 }
