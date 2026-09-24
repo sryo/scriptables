@@ -15,7 +15,6 @@ const Theme = importModule("lib/theme")
 const Widget = importModule("lib/widget")
 const DateTime = importModule("lib/datetime")
 const ZenTrateConfig = importModule("config/zentrate")
-const Schemes = importModule("lib/schemes")
 
 // ============================================
 // CONFIGURATION
@@ -212,6 +211,10 @@ if (params.shortcut) {
   const shortcutName = decodeURIComponent(params.shortcut)
   let url = decodeURIComponent(params.originalUrl)
   ZenTrateConfig.updateUsageCount(shortcutName)
+
+  // Imported here, not at the top: the widget render never needs it, and a
+  // widget can't pull a not-yet-downloaded iCloud file, so a top-level import breaks rendering
+  const Schemes = importModule("lib/schemes")
 
   // Items saved without a URL look one up by name on first tap, then keep it
   if (Schemes.isMissing(url)) {
