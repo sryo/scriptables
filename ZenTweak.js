@@ -7,6 +7,7 @@
  * Features:
  * - Visual WYSIWYG widget editor
  * - Add, edit, delete, and move items
+ * - Find item URLs by search, Claude, or shortcut name (also from Siri)
  * - Time and day constraints
  * - Sort method selection
  */
@@ -16,6 +17,7 @@ const Widget = importModule("lib/widget")
 const Validate = importModule("lib/validate")
 const UI = importModule("lib/ui")
 const ZenTrateConfig = importModule("config/zentrate")
+const Schemes = importModule("lib/schemes")
 
 // ============================================
 // CONFIGURATION
@@ -168,48 +170,236 @@ async function editItem(itemName) {
 }
 
 /**
- * Adds a new item to a column
+ * Adds a new item to a column. Finds the URL by catalog search, Claude, or shortcut name.
  * @param {string} column - Column to add to (left/center/right)
  */
 async function addItem(column) {
-  const config = loadConfig()
   const alert = new Alert()
-  alert.title = "Add New Item"
+  alert.title = "Add Item"
+  alert.message = "Type an app, an action, or a shortcut name."
+  alert.addTextField("e.g. Spotify")
 
-  const columnItems = config.items.filter(item => item.column === column)
-
-  alert.addTextField("Name")
-  alert.addTextField("Scheme URL")
-  alert.addTextField("Position", (columnItems.length + 1).toString())
-
-  alert.addAction("Add")
+  alert.addAction("Search")
+  alert.addAction("Ask Claude")
+  alert.addAction("Shortcut")
+  alert.addAction("Enter URL")
   alert.addCancelAction("Cancel")
 
   const response = await alert.presentAlert()
+  const query = alert.textFieldValue(0).trim()
 
-  if (response === 0) {
-    const name = alert.textFieldValue(0).trim()
-    const scheme = alert.textFieldValue(1).trim()
+  if (response >= 0 && response <= 2 && !query) {
+    await UI.showError("Error", "Type a name first")
+    return addItem(column)
+  }
 
-    if (!name) {
-      await UI.showError("Error", "Name is required")
-      await showEditableWidget()
+  let picked = null
+  switch (response) {
+    case 0:
+      picked = await pickFromCatalog(query)
+      break
+    case 1:
+      picked = await pickFromClaude(query)
+      break
+    case 2:
+      picked = Schemes.shortcutItem(query)
+      break
+    case 3:
+      picked = { name: query, scheme: "" }
+      break
+  }
+
+  if (picked) {
+    const saved = await confirmNewItem(column, picked)
+    // Testing opens another app, so skip re-presenting the editor
+    if (saved && saved.test) {
+      Safari.open(saved.item.scheme)
       return
     }
-
-    const newItem = {
-      name: name,
-      scheme: scheme || "about:blank",
-      column: column,
-      position: parseInt(alert.textFieldValue(2)) || (columnItems.length + 1)
-    }
-
-    config.items.push(newItem)
-    config.items.sort((a, b) => (a.position || 0) - (b.position || 0))
-    saveConfig(config)
   }
 
   await showEditableWidget()
+}
+
+/**
+ * Shows catalog matches as a sheet
+ * @param {string} query
+ * @returns {Promise<Object|null>} Picked { name, scheme } or null
+ */
+async function pickFromCatalog(query) {
+  const matches = Schemes.search(query)
+
+  const sheet = new Alert()
+  sheet.title = matches.length ? "Pick an app" : `No match for "${query}"`
+  for (const m of matches) sheet.addAction(`${m.name}  ·  ${m.scheme}`)
+  sheet.addAction("Ask Claude")
+  sheet.addAction("Enter URL")
+  sheet.addCancelAction("Cancel")
+
+  const response = await sheet.presentSheet()
+  if (response < 0) return null
+  if (response < matches.length) return matches[response]
+  if (response === matches.length) return pickFromClaude(query)
+  return { name: query, scheme: "" }
+}
+
+/**
+ * Asks Claude and shows its suggestions as a sheet
+ * @param {string} query
+ * @returns {Promise<Object|null>} Picked { name, scheme } or null
+ */
+async function pickFromClaude(query) {
+  const apiKey = await Schemes.getApiKey(true)
+  if (!apiKey) return null
+
+  let results
+  try {
+    results = await Schemes.askClaude(query, apiKey)
+  } catch (error) {
+    if (!error.keyError) {
+      await UI.showError("Claude Error", error.message)
+      return null
+    }
+    const alert = new Alert()
+    alert.title = "API Key Rejected"
+    alert.message = error.message
+    alert.addAction("Change Key")
+    alert.addCancelAction("Cancel")
+    if (await alert.presentAlert() !== 0) return null
+    return (await Schemes.promptApiKey()) ? pickFromClaude(query) : null
+  }
+
+  const sheet = new Alert()
+  sheet.title = results.length ? "Claude suggests" : "Claude found nothing"
+  sheet.message = "Guesses. Use Save & Test to check."
+  for (const r of results) {
+    const flag = r.confidence === "high" ? "" : ` (${r.confidence})`
+    sheet.addAction(`${r.name}  ·  ${r.scheme}${flag}`)
+  }
+  sheet.addAction("Enter URL")
+  sheet.addAction("Change API Key")
+  sheet.addCancelAction("Cancel")
+
+  const response = await sheet.presentSheet()
+  if (response === results.length + 1) {
+    return (await Schemes.promptApiKey()) ? pickFromClaude(query) : null
+  }
+  if (response < 0) return null
+  if (response < results.length) return results[response]
+  return { name: query, scheme: "" }
+}
+
+/**
+ * Lets the user review name, URL, and position before saving
+ * @param {string} column
+ * @param {Object} picked - { name, scheme }
+ * @returns {Promise<Object|null>} { item, test } when saved, null when cancelled
+ */
+async function confirmNewItem(column, picked) {
+  const config = loadConfig()
+  const columnItems = config.items.filter(item => item.column === column)
+
+  const alert = new Alert()
+  alert.title = "Add Item"
+  alert.addTextField("Name", picked.name)
+  alert.addTextField("Scheme URL", picked.scheme)
+  alert.addTextField("Position", (columnItems.length + 1).toString())
+
+  alert.addAction("Save")
+  alert.addAction("Save & Test")
+  alert.addCancelAction("Cancel")
+
+  const response = await alert.presentAlert()
+  if (response < 0) return null
+
+  const name = alert.textFieldValue(0).trim()
+  let scheme = alert.textFieldValue(1).trim()
+
+  if (!name) {
+    await UI.showError("Error", "Name is required")
+    return confirmNewItem(column, { name, scheme })
+  }
+  // Items are looked up by name, so names must be unique
+  if (config.items.some(i => i.name === name)) {
+    await UI.showError("Error", `"${name}" already exists`)
+    return confirmNewItem(column, { name, scheme })
+  }
+
+  if (!scheme) {
+    const found = await Schemes.resolve(name).catch(() => null)
+    if (found) scheme = found.scheme
+    else await UI.showError("No URL found", `Saved "${name}" without a URL. It will look again when tapped.`)
+  }
+
+  const newItem = {
+    name: name,
+    scheme: scheme || "about:blank",
+    column: column,
+    position: parseInt(alert.textFieldValue(2)) || (columnItems.length + 1)
+  }
+
+  config.items.push(newItem)
+  config.items.sort((a, b) => (a.position || 0) - (b.position || 0))
+  saveConfig(config)
+
+  return { item: newItem, test: response === 1 }
+}
+
+// ============================================
+// SIRI / SHORTCUTS
+// ============================================
+
+/**
+ * Reads text passed in from a Shortcut ("Run Script" parameter)
+ * @returns {string|null}
+ */
+function getShortcutQuery() {
+  const param = args.shortcutParameter
+  if (typeof param === "string" && param.trim()) return param.trim()
+  const texts = args.plainTexts || []
+  if (texts.length && texts[0].trim()) return texts[0].trim()
+  return null
+}
+
+/**
+ * Adds an item without any UI, for Siri. Replies through the Shortcut output.
+ * Apps go to the left column, shortcuts to the right, matching the current layout.
+ * @param {string} query - e.g. "Spotify" or "shortcut Leer QR"
+ * @returns {Promise<string>} Message for Siri to speak
+ */
+async function addFromSiri(query) {
+  let picked = null
+  let column = "left"
+
+  const shortcutMatch = query.match(/^(shortcut|atajo)\s+(.+)$/i)
+  if (shortcutMatch) {
+    picked = Schemes.shortcutItem(shortcutMatch[2])
+    column = "right"
+  } else {
+    try {
+      picked = await Schemes.resolve(query)
+    } catch (error) {
+      return `Claude error: ${error.message}`
+    }
+  }
+
+  if (!picked) return `I couldn't find a URL for "${query}".`
+
+  const config = loadConfig()
+  if (config.items.some(i => i.name === picked.name)) {
+    return `${picked.name} is already in ZenTrate.`
+  }
+
+  const columnItems = config.items.filter(item => item.column === column)
+  config.items.push({
+    name: picked.name,
+    scheme: picked.scheme,
+    column: column,
+    position: columnItems.length + 1
+  })
+  saveConfig(config)
+
+  return `Added ${picked.name} to ZenTrate.`
 }
 
 /**
@@ -370,6 +560,12 @@ async function showMainMenu() {
  * Main execution handler
  */
 async function run() {
+  const shortcutQuery = getShortcutQuery()
+  if (shortcutQuery) {
+    Script.setShortcutOutput(await addFromSiri(shortcutQuery))
+    return
+  }
+
   const params = Widget.getActionParams()
 
   if (params.action) {

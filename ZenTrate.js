@@ -15,6 +15,7 @@ const Theme = importModule("lib/theme")
 const Widget = importModule("lib/widget")
 const DateTime = importModule("lib/datetime")
 const ZenTrateConfig = importModule("config/zentrate")
+const Schemes = importModule("lib/schemes")
 
 // ============================================
 // CONFIGURATION
@@ -209,9 +210,32 @@ const params = Widget.getActionParams()
 if (params.shortcut) {
   // Handle item tap - update stats and open URL
   const shortcutName = decodeURIComponent(params.shortcut)
-  const originalUrl = decodeURIComponent(params.originalUrl)
+  let url = decodeURIComponent(params.originalUrl)
   ZenTrateConfig.updateUsageCount(shortcutName)
-  Safari.open(originalUrl)
+
+  // Items saved without a URL look one up by name on first tap, then keep it
+  if (Schemes.isMissing(url)) {
+    const found = await Schemes.resolve(shortcutName).catch(() => null)
+    if (found) {
+      url = found.scheme
+      const config = ZenTrateConfig.loadConfig()
+      const item = config.items.find(i => i.name === shortcutName)
+      if (item) {
+        item.scheme = url
+        ZenTrateConfig.saveConfig(config)
+      }
+    }
+  }
+
+  if (Schemes.isMissing(url)) {
+    const alert = new Alert()
+    alert.title = "No URL"
+    alert.message = `Couldn't find a URL for "${shortcutName}". Set one in ZenTweak.`
+    alert.addAction("OK")
+    await alert.presentAlert()
+  } else {
+    Safari.open(url)
+  }
   Script.complete()
 } else {
   // Display widget
