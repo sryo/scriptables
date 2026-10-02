@@ -102,8 +102,8 @@ function validateTheme(theme) {
     errors.push("Invalid text color (use 6-digit hex, e.g., FFFFFF)")
   }
 
-  const minSize = parseInt(theme.minFontSize)
-  const maxSize = parseInt(theme.maxFontSize)
+  const minSize = parseFontSize(theme.minFontSize)
+  const maxSize = parseFontSize(theme.maxFontSize)
 
   if (isNaN(minSize) || minSize < 8 || minSize > 72) {
     errors.push("Min font size must be 8-72")
@@ -121,16 +121,28 @@ function validateTheme(theme) {
 }
 
 /**
+ * Parses a whole-number font size typed by the user
+ * @param {string|number} value
+ * @returns {number} NaN unless the value is an integer
+ */
+function parseFontSize(value) {
+  const text = String(value ?? "").trim()
+  return /^\d+$/.test(text) ? Number(text) : NaN
+}
+
+/**
  * Shows the theme configuration/creation UI
+ * @param {Object} [draft] - Previously entered values to prefill after a validation error
  * @returns {Promise<boolean>} True if theme was saved
  */
-async function showConfigurationUI() {
+async function showConfigurationUI(draft = null) {
   const currentTheme = Theme.loadTheme()
+  const prefill = draft || currentTheme
   const alert = new Alert()
   alert.title = "New Theme"
 
   THEME_FIELDS.forEach(field => {
-    const value = String(currentTheme[field.key] || "")
+    const value = String(prefill[field.key] ?? "")
     alert.addTextField(`${field.label}`, value)
   })
 
@@ -140,31 +152,32 @@ async function showConfigurationUI() {
   const response = await alert.presentAlert()
 
   if (response !== -1) {
-    const newTheme = {}
+    const entered = {}
     THEME_FIELDS.forEach((field, index) => {
-      newTheme[field.key] = alert.textFieldValue(index)
+      entered[field.key] = alert.textFieldValue(index)
     })
 
-    // Convert fontItalic to boolean
-    newTheme.fontItalic = newTheme.fontItalic.toLowerCase() === 'true'
-
-    // Convert font sizes to numbers
-    newTheme.minFontSize = parseInt(newTheme.minFontSize) || 10
-    newTheme.maxFontSize = parseInt(newTheme.maxFontSize) || 20
-
-    // Validate theme
-    const validation = validateTheme(newTheme)
+    const validation = validateTheme(entered)
     if (!validation.valid) {
       await UI.showError("Validation Error", validation.errors.join("\n"))
-      return showConfigurationUI() // Retry
+      return showConfigurationUI(entered)
     }
+
+    // Fields the editor doesn't expose (e.g. accentColor) carry over from
+    // the current theme; filename is picker bookkeeping, not theme data.
+    const { filename: _, ...inherited } = currentTheme
+    const newTheme = { ...inherited, ...entered }
+    newTheme.name = entered.name.trim()
+    newTheme.fontItalic = entered.fontItalic.trim().toLowerCase() === 'true'
+    newTheme.minFontSize = parseFontSize(entered.minFontSize)
+    newTheme.maxFontSize = parseFontSize(entered.maxFontSize)
 
     // Clean hex colors (remove # if present)
     newTheme.bgColor = Validate.validateHexColor(newTheme.bgColor)
     newTheme.textColor = Validate.validateHexColor(newTheme.textColor)
 
     // Generate filename
-    const filename = `${newTheme.name.toLowerCase().replace(/\s+/g, '-')}.json`
+    const filename = Theme.themeFilename(newTheme.name)
 
     // Save as current theme and to folder
     Theme.saveTheme(newTheme)
@@ -186,6 +199,7 @@ async function showConfigurationUI() {
 // ============================================
 
 async function run() {
+  await Theme.downloadThemes()
   ensureThemesFolder()
   await showThemePicker()
   Script.complete()
