@@ -45,15 +45,22 @@ const WEATHER_CODES = {
   51: "light drizzle",
   53: "drizzle",
   55: "heavy drizzle",
+  56: "freezing drizzle",
+  57: "freezing drizzle",
   61: "light rain",
   63: "rain",
   65: "heavy rain",
+  66: "freezing rain",
+  67: "freezing rain",
   71: "light snow",
   73: "snow",
   75: "heavy snow",
+  77: "snow grains",
   80: "light showers",
   81: "showers",
   82: "heavy showers",
+  85: "snow showers",
+  86: "heavy snow showers",
   95: "thunderstorms",
   96: "thunderstorms with hail",
   99: "severe storms"
@@ -127,11 +134,14 @@ const ZenCalendar = importModule("lib/calendar")
 //               and past 21:00)
 // All-day events are ignored for mode selection (they don't define a
 // "start" or "end" to the timed day) but still appear in the digest.
+// So are timed events carried over from yesterday: an overnight event
+// that ended at 01:00 must not make 08:00 look like the day is over.
 function pickMode(now, todayEvents) {
+  const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
   let earliestStart = Infinity
   let latestEnd = -Infinity
   for (const e of todayEvents) {
-    if (e.isAllDay) continue
+    if (e.isAllDay || e.startDate < dayStart) continue
     const start = e.startDate.getTime()
     const end = e.endDate.getTime()
     if (start < earliestStart) earliestStart = start
@@ -159,7 +169,8 @@ const CAP_ITEMS = 4
 
 const MODES = {
   morning: {
-    selectEvents: ({ todayEvents }) => todayEvents,
+    selectEvents: ({ todayEvents, now }) =>
+      todayEvents.filter(e => e.isAllDay || e.endDate > now),
     selectReminders: ({ todayReminders }) => todayReminders,
     formatWeather: ({ current, today }) => {
       let line = `${current.temp}° ${current.condition} · ↑${today.high} ↓${today.low}`
@@ -174,7 +185,7 @@ const MODES = {
     selectEvents: ({ todayEvents, now }) =>
       todayEvents.filter(e => e.isAllDay || e.endDate > now),
     selectReminders: ({ todayReminders, now }) =>
-      todayReminders.filter(r => !r.dueDate || r.dueDate > now),
+      todayReminders.filter(r => !r.dueDate || r.dueDateIncludesTime === false || r.dueDate > now),
     formatWeather: ({ current }) => `${current.temp}° ${current.condition}`,
     formatReminders: (n) => `${n} ${n === 1 ? 'reminder' : 'reminders'} pending.`,
     emptyDigest: "The rest of the day is yours.",
@@ -205,7 +216,7 @@ function formatTime(date) {
   return timeFormatter.string(date).replace(/:00(?=\D|$)/, '')
 }
 
-function formatEventDigest(events, modeConfig) {
+function formatEventDigest(events, modeConfig, now) {
   if (events.length === 0) return modeConfig.emptyDigest
 
   const allDay = []
@@ -223,7 +234,9 @@ function formatEventDigest(events, modeConfig) {
   if (timed.length > 0) {
     const shown = timed.slice(0, CAP_ITEMS)
     const overflow = timed.length - shown.length
-    let clause = shown.map(e => `${e.title} at ${formatTime(e.startDate)}`).join(", ")
+    let clause = shown.map(e => e.startDate <= now
+      ? `${e.title} until ${formatTime(e.endDate)}`
+      : `${e.title} at ${formatTime(e.startDate)}`).join(", ")
     clause += overflow > 0 ? `, and ${overflow} more.` : "."
     parts.push(clause)
   }
@@ -234,6 +247,26 @@ function formatEventDigest(events, modeConfig) {
 // ============================================
 // WIDGET CREATION
 // ============================================
+
+// The digest changes when an event starts or ends, a timed reminder
+// falls due, or the day rolls over ("Tomorrow" becomes today).
+function nextChange(now, events, reminders, fallback) {
+  let next = fallback.getTime()
+  const consider = (d) => {
+    const t = d && d.getTime()
+    if (t > now.getTime() && t < next) next = t
+  }
+  for (const e of events) {
+    if (e.isAllDay) continue
+    consider(e.startDate)
+    consider(e.endDate)
+  }
+  for (const r of reminders) {
+    if (r.dueDateIncludesTime !== false) consider(r.dueDate)
+  }
+  consider(new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1))
+  return new Date(next)
+}
 
 function addLine(stack, text, font, url) {
   const row = stack.addStack()
@@ -273,8 +306,10 @@ async function createWidget() {
   const eventsForDigest = modeConfig.selectEvents(inputs)
   const remindersForLine = modeConfig.selectReminders(inputs)
 
-  const digestLine = formatEventDigest(eventsForDigest, modeConfig)
+  const digestLine = formatEventDigest(eventsForDigest, modeConfig, now)
   const weatherLine = weather ? modeConfig.formatWeather(weather) : null
+  widget.refreshAfterDate = nextChange(now, todayEvents, todayReminders, widget.refreshAfterDate)
+
   const remindersLine = remindersForLine.length > 0
     ? modeConfig.formatReminders(remindersForLine.length)
     : null
@@ -282,7 +317,7 @@ async function createWidget() {
   const mainStack = widget.addStack()
   mainStack.layoutVertically()
 
-  addLine(mainStack, DateTime.getGreeting(), Theme.getBoldFont(themeConfig.maxFontSize - 2, themeConfig), "calshow://")
+  addLine(mainStack, DateTime.getGreeting(), Theme.getBoldFont(themeConfig.maxFontSize - 2, themeConfig), userConfig.widgetUrl)
   mainStack.addSpacer(6)
 
   if (weatherLine) {
@@ -290,7 +325,7 @@ async function createWidget() {
     mainStack.addSpacer(4)
   }
 
-  addLine(mainStack, digestLine, Theme.getRegularFont(themeConfig.minFontSize + 2, themeConfig), "calshow://")
+  addLine(mainStack, digestLine, Theme.getRegularFont(themeConfig.minFontSize + 2, themeConfig), userConfig.widgetUrl)
 
   if (remindersLine) {
     mainStack.addSpacer(2)
