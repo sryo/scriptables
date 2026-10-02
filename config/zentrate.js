@@ -36,9 +36,23 @@ const EXAMPLE_CONFIG = {
 
 function loadConfig() {
   const stored = fs.loadJSON(CONFIG_PATH, null)
-  if (stored) return stored
+  if (stored && typeof stored === 'object') {
+    stored.items = (Array.isArray(stored.items) ? stored.items : []).filter(item =>
+      item && typeof item === 'object' && item.name
+    )
+    return stored
+  }
+  // An evicted iCloud file reads as null too; seeding it would overwrite
+  // the user's real config.
+  if (fs.fileExists(CONFIG_PATH)) return { ...EMPTY_CONFIG, items: [] }
   fs.saveJSON(CONFIG_PATH, EXAMPLE_CONFIG)
   return EXAMPLE_CONFIG
+}
+
+// Interactive runs can wait for iCloud; widget renders can't.
+async function downloadFiles() {
+  await fs.ensureDownloaded(CONFIG_PATH)
+  await fs.ensureDownloaded(STATS_PATH)
 }
 
 function loadConfigForEditor() {
@@ -74,6 +88,7 @@ module.exports = {
   EXAMPLE_CONFIG,
   loadConfig,
   loadConfigForEditor,
+  downloadFiles,
   saveConfig,
   loadStats,
   saveStats,

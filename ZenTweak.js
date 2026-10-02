@@ -26,6 +26,8 @@ const Schemes = importModule("lib/schemes")
 const loadConfig = ZenTrateConfig.loadConfigForEditor
 const saveConfig = ZenTrateConfig.saveConfig
 
+const COLUMNS = ['left', 'center', 'right']
+
 // ============================================
 // WYSIWYG EDITOR WIDGET
 // ============================================
@@ -42,9 +44,7 @@ function createEditableWidget(config) {
   const mainStack = widget.addStack()
   mainStack.layoutHorizontally()
 
-  const columns = ['left', 'center', 'right']
-
-  for (const column of columns) {
+  for (const column of COLUMNS) {
     const columnStack = mainStack.addStack()
     columnStack.layoutVertically()
 
@@ -115,8 +115,9 @@ async function showEditableWidget() {
 /**
  * Edits an existing item
  * @param {string} itemName - Name of item to edit
+ * @param {Object} [draft] - { name, scheme } to prefill after a rejected save
  */
-async function editItem(itemName) {
+async function editItem(itemName, draft = null) {
   const config = loadConfig()
   const item = config.items.find(i => i.name === itemName)
 
@@ -135,8 +136,8 @@ async function editItem(itemName) {
   const endTime = item.endTime || 'any time'
   alert.message = `Shows from ${startDay} to ${endDay}, between ${startTime} and ${endTime}.`
 
-  alert.addTextField("Name", item.name)
-  alert.addTextField("Scheme URL", item.scheme)
+  alert.addTextField("Name", draft ? draft.name : item.name)
+  alert.addTextField("Scheme URL", draft ? draft.scheme : item.scheme)
 
   alert.addAction("Save")
   alert.addAction("Set Time Constraints")
@@ -147,26 +148,88 @@ async function editItem(itemName) {
   const response = await alert.presentAlert()
 
   switch (response) {
-    case 0: // Save
-      item.name = alert.textFieldValue(0)
-      item.scheme = alert.textFieldValue(1)
+    case 0: { // Save
+      const name = alert.textFieldValue(0).trim()
+      const typedScheme = alert.textFieldValue(1).trim()
+      // Blank URLs are looked up by name on first tap, like new items
+      const scheme = !typedScheme ? "about:blank"
+        : typedScheme === item.scheme ? item.scheme
+        : Validate.validateURL(typedScheme)
+
+      let error = null
+      if (!name) error = "Name is required"
+      else if (name !== itemName && config.items.some(i => i.name === name)) error = `"${name}" already exists`
+      else if (!scheme) error = `"${typedScheme}" is not a valid URL`
+      if (error) {
+        await UI.showError("Error", error)
+        return editItem(itemName, { name, scheme: typedScheme })
+      }
+
+      if (name !== itemName) renameUsageStats(itemName, name)
+      item.name = name
+      item.scheme = scheme
       saveConfig(config)
       break
+    }
     case 1: // Time Constraints
       await setTimeConstraints(item)
       saveConfig(config)
       break
     case 2: // Move
+      // moveItems saves and re-presents the editor itself
       await moveItems([item])
-      saveConfig(config)
-      break
+      return
     case 3: // Delete
       config.items = config.items.filter(i => i.name !== itemName)
       saveConfig(config)
+      removeUsageStats(itemName)
       break
   }
 
   await showEditableWidget()
+}
+
+function removeUsageStats(name) {
+  const stats = ZenTrateConfig.loadStats()
+  if (stats[name] === undefined) return
+  delete stats[name]
+  ZenTrateConfig.saveStats(stats)
+}
+
+/**
+ * Moves an item's usage count to its new name (stats are keyed by name)
+ * @param {string} oldName
+ * @param {string} newName
+ */
+function renameUsageStats(oldName, newName) {
+  const stats = ZenTrateConfig.loadStats()
+  if (stats[oldName] === undefined) return
+  stats[newName] = stats[oldName]
+  delete stats[oldName]
+  ZenTrateConfig.saveStats(stats)
+}
+
+/**
+ * Inserts items into their shared column at a 1-based position, then rebuilds
+ * config.items grouped by column with positions renumbered. ZenTrate's manual
+ * sort shows items in array order, so array order and position must agree.
+ * @param {Object} config
+ * @param {Object[]} items - Items to place, all with the same column
+ * @param {number} position - Clamped to the column's bounds
+ */
+function placeInColumn(config, items, position) {
+  const column = items[0].column
+  const rest = config.items.filter(item => !items.includes(item))
+  const target = rest.filter(item => item.column === column)
+  const index = Math.min(Math.max(position - 1, 0), target.length)
+  target.splice(index, 0, ...items)
+
+  const extraColumns = [...new Set(rest.map(item => item.column))].filter(col => !COLUMNS.includes(col))
+  config.items = [...COLUMNS, ...extraColumns].flatMap(col => {
+    const colItems = col === column ? target : rest.filter(item => item.column === col)
+    colItems.forEach((item, i) => { item.position = i + 1 })
+    return colItems
+  })
 }
 
 /**
@@ -324,6 +387,10 @@ async function confirmNewItem(column, picked) {
     await UI.showError("Error", `"${name}" already exists`)
     return confirmNewItem(column, { name, scheme })
   }
+  if (scheme && !Validate.validateURL(scheme)) {
+    await UI.showError("Error", `"${scheme}" is not a valid URL`)
+    return confirmNewItem(column, { name, scheme })
+  }
 
   if (!scheme) {
     const found = await Schemes.resolve(name).catch(() => null)
@@ -334,12 +401,10 @@ async function confirmNewItem(column, picked) {
   const newItem = {
     name: name,
     scheme: scheme || "about:blank",
-    column: column,
-    position: parseInt(alert.textFieldValue(2)) || (columnItems.length + 1)
+    column: column
   }
 
-  config.items.push(newItem)
-  config.items.sort((a, b) => (a.position || 0) - (b.position || 0))
+  placeInColumn(config, [newItem], parseInt(alert.textFieldValue(2)) || (columnItems.length + 1))
   saveConfig(config)
 
   return { item: newItem, test: response === 1 }
@@ -408,6 +473,8 @@ async function addFromSiri(query) {
  */
 async function moveItems(items) {
   const config = loadConfig()
+  // Callers may pass items from another loadConfig(), so match by name
+  const movingNames = items.map(item => item.name)
   const alert = new Alert()
   alert.title = "Move/Reposition Item(s)"
 
@@ -418,8 +485,7 @@ async function moveItems(items) {
   alert.message = `Current position: ${currentPosition} in ${currentColumn} column`
   alert.addTextField("New Position", currentPosition.toString())
 
-  const columns = ['left', 'center', 'right']
-  const otherColumns = columns.filter(col => col !== currentColumn)
+  const otherColumns = COLUMNS.filter(col => col !== currentColumn)
 
   otherColumns.forEach(col => {
     alert.addAction(`Move to ${col.charAt(0).toUpperCase() + col.slice(1)}`)
@@ -434,28 +500,9 @@ async function moveItems(items) {
     const newPosition = parseInt(alert.textFieldValue(0)) || currentPosition
     const newColumn = response < otherColumns.length ? otherColumns[response] : currentColumn
 
-    // Remove items from current position
-    config.items = config.items.filter(item => !items.includes(item))
-
-    // Insert at new position
-    const itemToInsert = { ...items[0], column: newColumn, position: newPosition }
-    config.items.push(itemToInsert)
-
-    // Sort and update positions
-    config.items.sort((a, b) => {
-      if (a.column !== b.column) {
-        return columns.indexOf(a.column) - columns.indexOf(b.column)
-      }
-      return (a.position || 0) - (b.position || 0)
-    })
-
-    // Renumber positions within each column
-    columns.forEach(column => {
-      const colItems = config.items.filter(item => item.column === column)
-      colItems.forEach((item, index) => {
-        item.position = index + 1
-      })
-    })
+    const moving = config.items.filter(item => movingNames.includes(item.name))
+    moving.forEach(item => { item.column = newColumn })
+    placeInColumn(config, moving, newPosition)
 
     saveConfig(config)
   }
@@ -484,15 +531,24 @@ async function setTimeConstraints(item) {
   const response = await alert.presentAlert()
 
   if (response === 0) {
+    // Validate every field before touching the item, so a rejected form saves nothing
+    let constraints
     try {
-      item.startTime = Validate.validateTime(alert.textFieldValue(0))
-      item.endTime = Validate.validateTime(alert.textFieldValue(1))
-      item.startDay = Validate.validateDay(alert.textFieldValue(2))
-      item.endDay = Validate.validateDay(alert.textFieldValue(3))
+      constraints = {
+        startTime: Validate.validateTime(alert.textFieldValue(0)),
+        endTime: Validate.validateTime(alert.textFieldValue(1)),
+        startDay: Validate.validateDay(alert.textFieldValue(2)),
+        endDay: Validate.validateDay(alert.textFieldValue(3))
+      }
+      // The widget ignores a day range unless both ends are set
+      if ((constraints.startDay === undefined) !== (constraints.endDay === undefined)) {
+        throw new Error("Set both Start Day and End Day, or leave both blank.")
+      }
     } catch (error) {
       await UI.showError("Validation Error", error.message)
       return setTimeConstraints(item) // Retry
     }
+    Object.assign(item, constraints)
   } else if (response === 1) {
     delete item.startTime
     delete item.endTime
@@ -557,9 +613,25 @@ async function showMainMenu() {
 }
 
 /**
+ * Decodes a query parameter, tolerating values that arrive already decoded
+ * (decoding a name with a bare "%" again would throw)
+ * @param {string} value
+ * @returns {string}
+ */
+function decodeParam(value) {
+  try {
+    return decodeURIComponent(value)
+  } catch (error) {
+    return value
+  }
+}
+
+/**
  * Main execution handler
  */
 async function run() {
+  await ZenTrateConfig.downloadFiles()
+
   const shortcutQuery = getShortcutQuery()
   if (shortcutQuery) {
     Script.setShortcutOutput(await addFromSiri(shortcutQuery))
@@ -571,14 +643,14 @@ async function run() {
   if (params.action) {
     switch (params.action) {
       case 'editItem':
-        await editItem(decodeURIComponent(params.itemName))
+        await editItem(decodeParam(params.itemName))
         break
       case 'addItem':
-        await addItem(decodeURIComponent(params.column))
+        await addItem(decodeParam(params.column))
         break
       case 'moveItems':
         const config = loadConfig()
-        const fromColumn = decodeURIComponent(params.fromColumn)
+        const fromColumn = decodeParam(params.fromColumn)
         const itemsToMove = config.items.filter(item => item.column === fromColumn)
         if (itemsToMove.length > 0) {
           await moveItems(itemsToMove)
