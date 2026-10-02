@@ -23,7 +23,7 @@ const SCRIPTABLE_HEADER_GLOBALS = [
   "DateFormatter", "ListWidget", "Font", "Color", "Alert", "Script", "Device", "Request",
   "Location", "Safari", "Keychain", "Timer", "Size", "Photos", "config", "args",
   "importModule", "console", "Date", "Promise", "Math", "JSON", "Object", "Array",
-  "String", "Number", "Error", "Intl", "setTimeout"
+  "String", "Number", "Error", "Intl", "setTimeout", "WebView", "DrawContext", "Rect", "Point"
 ]
 
 // ---------- Fake clock ----------
@@ -83,7 +83,7 @@ class Container {
 }
 
 class WidgetStack extends Container {
-  constructor() { super("stack"); this.layout = "horizontal" }
+  constructor() { super("stack"); this.layout = "horizontal"; this.size = null }
   layoutHorizontally() { this.layout = "horizontal" }
   layoutVertically() { this.layout = "vertical" }
   topAlignContent() {}
@@ -92,10 +92,36 @@ class WidgetStack extends Container {
 }
 
 class ListWidget extends Container {
-  constructor() { super("widget"); this.refreshAfterDate = null; this.backgroundColor = null }
+  constructor() { super("widget"); this.refreshAfterDate = null; this.backgroundColor = null; this.backgroundImage = null }
   async presentSmall() {}
   async presentMedium() {}
   async presentLarge() {}
+}
+
+// ---------- Drawing ----------
+
+class Rect {
+  constructor(x, y, width, height) { this.x = x; this.y = y; this.width = width; this.height = height }
+}
+
+class Point {
+  constructor(x, y) { this.x = x; this.y = y }
+}
+
+/** Records every call as { op, ...args }; getImage() snapshots the list. */
+class DrawContext {
+  constructor() { this.size = null; this.respectScreenScale = false; this.opaque = true; this.ops = [] }
+  setFont(font) { this.ops.push({ op: "setFont", font }) }
+  setTextColor(color) { this.ops.push({ op: "setTextColor", color }) }
+  setTextAlignedLeft() { this.ops.push({ op: "setTextAligned", align: "left" }) }
+  setTextAlignedCenter() { this.ops.push({ op: "setTextAligned", align: "center" }) }
+  setTextAlignedRight() { this.ops.push({ op: "setTextAligned", align: "right" }) }
+  drawTextInRect(text, rect) { this.ops.push({ op: "drawTextInRect", text, rect }) }
+  setFillColor(color) { this.ops.push({ op: "setFillColor", color }) }
+  fillRect(rect) { this.ops.push({ op: "fillRect", rect }) }
+  getImage() {
+    return { type: "image", ops: this.ops.slice(), size: this.size, respectScreenScale: this.respectScreenScale, opaque: this.opaque }
+  }
 }
 
 /** Flattens a widget tree into the ordered list of text/date leaves. */
@@ -119,6 +145,9 @@ function createRuntime(opts = {}) {
   const rt = {
     files, logs, widget: null, alerts: [], openedUrls: [], shortcutOutput: undefined,
     alertResponses: opts.alertResponses ? [...opts.alertResponses] : [],
+    webViews: [],
+    webViewMessages: opts.webViewMessages ? [...opts.webViewMessages] : [],
+    keychain: new Map(Object.entries(opts.keychain || {})),
     setNow(d) { nowMs.value = d.getTime() },
     get now() { return new FakeDate() }
   }
@@ -158,6 +187,40 @@ function createRuntime(opts = {}) {
     async present() { const r = rt.alertResponses.shift(); if (typeof r === "function") return r(this); return r ?? -1 }
     async presentAlert() { return this.present() }
     async presentSheet() { return this.present() }
+  }
+
+  // The page's side of the editor bridge: each `ZT.next()` callback hands
+  // Scriptable the next queued message (objects are JSON-encoded like the
+  // page does, strings pass through raw). Once the queue is empty the user
+  // "dismisses" the view: present() resolves and ZT.next() never answers.
+  class WebView {
+    constructor() {
+      this.html = null; this.received = []; this.evaluated = []
+      this.shouldAllowRequest = null; this.presented = false; this.initialAllowed = null
+      this._closed = new Promise(r => { this._close = r })
+      rt.webViews.push(this)
+    }
+    async loadHTML(html, baseURL) {
+      this.html = html
+      this.loadedWhilePresented = this.presented
+      if (this.shouldAllowRequest) this.initialAllowed = this.shouldAllowRequest({ url: baseURL || "about:blank" })
+    }
+    async present(fullscreen) {
+      this.presented = true
+      this.fullscreen = !!fullscreen
+      return this._closed
+    }
+    async evaluateJavaScript(js, useCallback) {
+      this.evaluated.push(js)
+      const receive = js.match(/^ZT\.receive\(([\s\S]*)\)$/)
+      if (receive) { this.received.push(JSON.parse(receive[1])); return null }
+      if (js === "ZT.next()" && useCallback) {
+        if (!rt.webViewMessages.length) { this._close(); return new Promise(() => {}) }
+        const next = rt.webViewMessages.shift()
+        return typeof next === "string" ? next : JSON.stringify(next)
+      }
+      return null
+    }
   }
 
   class RelativeDateTimeFormatter {
@@ -216,20 +279,27 @@ function createRuntime(opts = {}) {
     Reminder: {
       allDueBetween: async (start, end) => reminders.filter(r => r.dueDate && r.dueDate >= start && r.dueDate <= end)
     },
-    RelativeDateTimeFormatter, DateFormatter, ListWidget, Font, Color, Alert,
+    RelativeDateTimeFormatter, DateFormatter, ListWidget, Font, Color, Alert, WebView,
     Script: {
       name: () => opts.scriptName || "Script",
       setWidget: w => { rt.widget = w },
       complete: () => { rt.completed = true },
       setShortcutOutput: v => { rt.shortcutOutput = v }
     },
-    Device: { isUsingDarkAppearance: () => !!opts.dark, locale: () => opts.locale || "en_US", language: () => "en" },
+    Device: {
+      isUsingDarkAppearance: () => !!opts.dark, locale: () => opts.locale || "en_US", language: () => "en",
+      screenSize: () => opts.screenSize || { width: 390, height: 844 }
+    },
     Request: opts.Request || class { constructor(url) { this.url = url } async loadJSON() { throw new Error("offline") } async loadString() { throw new Error("offline") } },
     Location: { current: opts.location || (async () => { throw new Error("no location") }), setAccuracyToThreeKilometers() {} },
     Safari: { open: u => rt.openedUrls.push(u), openInApp: async u => rt.openedUrls.push(u) },
-    Keychain: { contains: () => false, get: () => null, set: () => {}, remove: () => {} },
+    Keychain: {
+      contains: k => rt.keychain.has(k), get: k => rt.keychain.get(k) ?? null,
+      set: (k, v) => { rt.keychain.set(k, v) }, remove: k => { rt.keychain.delete(k) }
+    },
     Timer: { schedule: () => ({ invalidate() {} }) },
     Size: function (w, h) { return { width: w, height: h } },
+    DrawContext, Rect, Point,
     Photos: {},
     config: { runsInWidget: false, runsInApp: false, runsInActionExtension: false, runsWithSiri: false, widgetFamily: "medium" },
     args: { queryParameters: {}, widgetParameter: null, plainTexts: [], shortcutParameter: null },

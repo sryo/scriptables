@@ -32,7 +32,13 @@ Each module owns one concern. Current contents: `fs`, `theme`, `widget`, `dateti
 
 ### `config/`
 
-Per-widget config persistence — schema, defaults, load/save, paths. Today this directory holds only `config/zentrate.js`, which is shared between `ZenTrate` (the launcher widget) and `ZenTweak` (its editor). Widgets with no sharing inline their config at the top of the widget file instead — see `ZenLendar.js` or `ZenDigest.js` for the pattern.
+Per-widget config persistence — schema, defaults, load/save, paths. `config/zentrate.js` is shared between `ZenTrate` (the launcher widget) and `ZenTweak` (its editor). Widgets with no sharing inline their config at the top of the widget file instead — see `ZenLendar.js` or `ZenDigest.js` for the pattern.
+
+ZenTweak's editor is a `WebView` page split in two modules: `config/zentrate-editor.js` (page helpers plus message validation and ops, all pure) and `config/zentrate-editor-page.js` (HTML, CSS and the page's UI script). Page helpers are injected with `fn.toString()` alongside the `lib/` and `config/` functions they call, so the page runs the same code the Node tests cover. The page can't load local files, so everything it needs — theme tokens, state, the scheme catalog — is inlined.
+
+The bridge: while `present()` is pending, Scriptable loops on `evaluateJavaScript("ZT.next()", true)`; the page answers each call with its next queued message (JSON) via `completion()`. Scriptable applies it, saves, and replies with `evaluateJavaScript("ZT.receive(<json>)")`. Scriptable can't dismiss a WebView, so every change autosaves; no Alerts are shown while the page is up.
+
+ZenTrate draws its text instead of stacking it: WidgetStacks can't overlap, and a heavily used item should stay big even over its neighbours. `posterLayout()` in `config/zentrate.js` is the pure geometry (fixed-height rows, full-width text boxes, draw order, backdrops, tap cells), so the editor preview can reuse it. ZenTrate draws that into `widget.backgroundImage` at the size `lib/widget.js` `widgetSize()` looks up for the device, then overlays a grid of empty, exactly sized stacks that carry the tap URLs. Lock screen accessories and the empty state keep the stacked text layout.
 
 A module ends up in `config/` when more than one consumer needs it. Solo configs stay inline.
 

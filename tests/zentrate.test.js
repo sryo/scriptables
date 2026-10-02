@@ -21,7 +21,22 @@ async function tap(params, opts = {}) {
   return rt
 }
 
-const names = rt => rt.leaves().map(l => l.text)
+/** Drawn texts with their font, in reading order: by row, then left to right. */
+function drawn(rt) {
+  const image = rt.widget.backgroundImage
+  if (!image) return []
+  const out = []
+  let font = null, align = null
+  for (const op of image.ops) {
+    if (op.op === "setFont") font = op.font
+    if (op.op === "setTextAligned") align = op.align
+    if (op.op === "drawTextInRect") out.push({ text: op.text, rect: op.rect, font, align, y: op.rect.y + op.rect.height / 2 })
+  }
+  const order = { left: 0, center: 1, right: 2 }
+  return out.sort((a, b) => a.y - b.y || order[a.align] - order[b.align])
+}
+
+const names = rt => drawn(rt).map(d => d.text)
 
 test("an overnight item is shown after midnight", async () => {
   const items = [{ name: "Sleep", column: "left", scheme: "x://", startTime: "22:00", endTime: "06:00" }]
@@ -70,7 +85,7 @@ test("usage sort orders by tap count, ties keep config order", async () => {
 test("font scale ignores stats of items no longer in the config", async () => {
   const items = [{ name: "Mail", column: "left", scheme: "x://" }]
   const rt = await render(items, { stats: { Mail: 10, Deleted: 500 } })
-  const font = rt.leaves()[0].font
+  const font = drawn(rt)[0].font
   assert.equal(font.size, 20, "the most-used remaining item gets the max font size")
 })
 
@@ -103,4 +118,56 @@ test("tap on an item with no URL looks one up instead of opening 'undefined'", a
   const files = { "zentrate_config.json": { items: [{ name: "Weather", column: "left" }], sortMethod: "manual" } }
   const rt = await tap({ shortcut: "Weather" }, { files })
   assert.deepEqual(rt.openedUrls, ["weather://"])
+})
+
+const item = (name, column, scheme = "x://") => ({ name, column, scheme })
+
+// ---------- Tap URLs ----------
+
+/** The URL of the tap cell under a drawn item: the row containing its center, the column its alignment names. */
+function tapUrl(rt, name) {
+  const text = drawn(rt).find(d => d.text === name)
+  let top = 0
+  for (const child of rt.widget.children[0].children) {
+    const height = child.type === "spacer" ? child.length : child.size.height
+    if (child.type === "stack" && text.y >= top && text.y < top + height) {
+      const cells = child.children
+      const index = text.align === "left" ? 0 : text.align === "right" ? cells.length - 1 : 1
+      return cells[index].url
+    }
+    top += height
+  }
+}
+
+test("tapping an item opens its app directly", async () => {
+  const rt = await render([item("Mail", "center", "message://")])
+  assert.equal(tapUrl(rt, "Mail"), "message://")
+})
+
+test("percent-escapes are kept and raw spaces are escaped so the tap URL is valid", async () => {
+  const escaped = "shortcuts://run-shortcut?name=Create%20Reminder"
+  const spaced = "shortcuts://run-shortcut?name=Log Water"
+  const rt = await render([item("Remind", "left", escaped), item("Water", "right", spaced)])
+  assert.equal(tapUrl(rt, "Remind"), escaped)
+  assert.equal(tapUrl(rt, "Water"), "shortcuts://run-shortcut?name=Log%20Water")
+})
+
+test("items without a URL still route through the script for the first-tap lookup", async () => {
+  const rt = await render([
+    { name: "Weather", column: "left" },
+    item("Blank", "center", "about:blank"),
+    item("Empty", "right", "  ")
+  ])
+  assert.equal(tapUrl(rt, "Weather"), "scriptable:///run?scriptName=ZenTrate&shortcut=Weather")
+  assert.ok(tapUrl(rt, "Blank").startsWith("scriptable:///run?scriptName=ZenTrate&shortcut=Blank"))
+  assert.ok(tapUrl(rt, "Empty").startsWith("scriptable:///run?scriptName=ZenTrate&shortcut=Empty"))
+})
+
+test("a first tap on a URL-less item saves the found URL so the next render opens it directly", async () => {
+  const files = { "zentrate_config.json": { items: [{ name: "Weather", column: "left" }], sortMethod: "manual" } }
+  const rt = await tap({ shortcut: "Weather" }, { files })
+  assert.deepEqual(rt.openedUrls, ["weather://"])
+  const saved = JSON.parse(rt.files.get(`${DOCS}/zentrate_config.json`))
+  const next = await render(saved.items)
+  assert.equal(tapUrl(next, "Weather"), "weather://")
 })
