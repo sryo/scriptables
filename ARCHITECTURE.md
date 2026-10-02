@@ -43,7 +43,7 @@ Theme JSON files. Shipped defaults (committed to git) plus any user-created them
 ## Conventions
 
 - **Active theme is memoized.** `lib/theme.js` caches the parsed theme at module scope. Safe because Scriptable's per-render fresh context bounds cache lifetime to a single render.
-- **No automated tests.** Verify on-device after every change: sync iCloud, tap *Run* in the Scriptable app, or place the widget on a home screen and wait for refresh.
+- **Tests run under Node with mocked Scriptable globals.** `node --test tests/`. `tests/harness.js` evaluates scripts and `lib/` modules with a fake clock, calendar, file system and alerts; `rt.widget` is the rendered tree. Write the failing test first. The harness can't prove on-device rendering, so still verify on-device after every change.
 - **One concern per commit.** Each commit should leave every widget working on device. The refactor history is split this way intentionally.
 - **Personal runtime data is gitignored.** `*_config.json`, `*_stats.json`, `zen_theme.json` are user state. They don't belong in source control.
 
@@ -53,4 +53,4 @@ Theme JSON files. Shipped defaults (committed to git) plus any user-created them
 2. Import only the `lib/*` modules you actually need (`Theme`, `Widget`, `DateTime`, `Calendar_`, `Validate`, `UI`, `Fs`).
 3. If the widget's config is shared with another widget (e.g. an editor), put it in `config/<name>.js`. Otherwise inline at the top — see `ZenDigest.js`.
 4. If the widget reads the calendar or reminders, prefer the existing `lib/calendar.js` helpers over rolling your own.
-5. Test on-device before committing.
+5. Add `tests/<name>.test.js`, then test on-device before committing.
