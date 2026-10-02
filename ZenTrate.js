@@ -20,6 +20,8 @@ const ZenTrateConfig = importModule("config/zentrate")
 // CONFIGURATION
 // ============================================
 
+if (!Widget.isWidget()) await ZenTrateConfig.downloadFiles()
+
 const themeConfig = Theme.loadTheme()
 const appConfig = ZenTrateConfig.loadConfig()
 const usageStats = ZenTrateConfig.loadStats()
@@ -35,8 +37,7 @@ const sortMethod = appConfig.sortMethod || "manual"
  * @returns {boolean} True if item should be shown
  */
 function shouldDisplayItem(item) {
-  return DateTime.isWithinTimeRange(item.startTime, item.endTime) &&
-         DateTime.isWithinDayRange(item.startDay, item.endDay)
+  return DateTime.isScheduledAt(item, new Date())
 }
 
 /**
@@ -74,7 +75,7 @@ const sortedItems = sortItems(filteredItems)
 function getFontSize(usageCount) {
   const minSize = themeConfig.minFontSize
   const maxSize = themeConfig.maxFontSize
-  const maxUsage = Math.max(...Object.values(usageStats), 1)
+  const maxUsage = Math.max(...appConfig.items.map(item => usageStats[item.name] || 0), 1)
 
   // Prevent zero division
   const safeCount = Math.max(usageCount, 0.001)
@@ -150,6 +151,11 @@ function createWidget() {
     theme: themeConfig
   })
 
+  const nextChange = DateTime.nextScheduleChange(appConfig.items, new Date())
+  if (nextChange && nextChange < widget.refreshAfterDate) {
+    widget.refreshAfterDate = nextChange
+  }
+
   const mainStack = widget.addStack()
   mainStack.layoutVertically()
 
@@ -207,9 +213,11 @@ function createWidget() {
 const params = Widget.getActionParams()
 
 if (params.shortcut) {
-  // Handle item tap - update stats and open URL
-  const shortcutName = decodeURIComponent(params.shortcut)
-  let url = decodeURIComponent(params.originalUrl)
+  // Handle item tap - update stats and open URL.
+  // Scriptable already percent-decodes queryParameters; decoding again breaks
+  // URLs with escapes (name=Create%20Reminder) and names containing "%"
+  const shortcutName = params.shortcut
+  let url = params.originalUrl
   ZenTrateConfig.updateUsageCount(shortcutName)
 
   // Imported here, not at the top: the widget render never needs it, and a
