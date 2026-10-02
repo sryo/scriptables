@@ -57,51 +57,88 @@ function getFontSize(index) {
 // DATE FORMATTING
 // ============================================
 
-/**
- * Formats event time as a relative string (e.g., "2 hours", "Tomorrow").
- * Handles all-day events and near-future events specially.
- *
- * @param {CalendarEvent} event - Calendar event
- * @returns {string} Formatted relative time string
- */
-function formatRelativeTime(event) {
-  const now = new Date()
-  const startDate = event.startDate
-  const endDate = event.endDate
+// Events starting within this window get a live, self-updating label
+// instead of text frozen at render time.
+const LIVE_WINDOW_MS = 60 * 60 * 1000
 
+function deviceLocale() {
+  return Device.locale().replace(/_/g, "-")
+}
+
+/**
+ * Localized "today", falling back to the formatter's "now" when Intl
+ * isn't available.
+ */
+function todayLabel(formatter, now) {
+  try {
+    return capitalize(new Intl.RelativeTimeFormat(deviceLocale(), { numeric: "auto" }).format(0, "day"))
+  } catch (e) {
+    return capitalize(formatter.string(now, now))
+  }
+}
+
+function capitalize(text) {
+  text = text.trim()
+  return text.charAt(0).toUpperCase() + text.slice(1)
+}
+
+/**
+ * Formats a future start date as a relative string (e.g. "2 hours",
+ * "Tomorrow"). Only valid for future dates: the leading "in"/"dentro de"
+ * is dropped, which for a past date would also drop "ago"/"hace".
+ */
+function formatUpcoming(startDate, now) {
   const formatter = new RelativeDateTimeFormatter()
   formatter.useNamedDateTimeStyle()
-
-  // Handle all-day events happening now
-  if (event.isAllDay) {
-    if (now >= startDate && now <= endDate) {
-      return formatter.string(now, now)
-    }
-  }
-
   let relativeDate = formatter.string(startDate, now)
 
-  // Handle empty string for very near times
   if (relativeDate === "") {
-    const diff = startDate.getTime() - now.getTime()
-    const minutes = Math.floor(diff / (1000 * 60))
-    if (minutes <= 0) {
-      return formatter.string(now, now)
-    } else {
-      formatter.useNumericDateTimeStyle()
-      relativeDate = formatter.string(startDate, now)
-    }
+    formatter.useNumericDateTimeStyle()
+    relativeDate = formatter.string(startDate, now)
   }
 
-  // Remove leading text before the number for cleaner display
   const match = relativeDate.match(/\d/)
   if (match) {
     relativeDate = relativeDate.slice(match.index)
   }
 
-  // Capitalize first letter
-  relativeDate = relativeDate.trim()
-  return relativeDate.charAt(0).toUpperCase() + relativeDate.slice(1)
+  return capitalize(relativeDate)
+}
+
+/**
+ * Adds the time label for an event: "Now"/"Today" while it is happening,
+ * a live signed countdown ("+14 min") when it starts soon, and a relative
+ * string otherwise.
+ */
+function addTimeLabel(stack, event, now) {
+  if (Calendar_.isOngoing(event, now)) {
+    const formatter = new RelativeDateTimeFormatter()
+    formatter.useNamedDateTimeStyle()
+    const label = event.isAllDay ? todayLabel(formatter, now) : capitalize(formatter.string(now, now))
+    return stack.addText(label)
+  }
+
+  if (event.startDate - now <= LIVE_WINDOW_MS) {
+    const date = stack.addDate(event.startDate)
+    date.applyOffsetStyle()
+    return date
+  }
+
+  return stack.addText(formatUpcoming(event.startDate, now))
+}
+
+/**
+ * The widget's content changes when an event starts or ends, and when an
+ * event enters the live window.
+ */
+function nextRefreshDate(events, now) {
+  const liveWindows = events.map(e => ({
+    startDate: new Date(e.startDate.getTime() - LIVE_WINDOW_MS),
+    endDate: e.startDate
+  }))
+  const boundary = Calendar_.nextBoundary([...events, ...liveWindows], now)
+  const fallback = new Date(now.getTime() + 15 * 60 * 1000)
+  return boundary && boundary < fallback ? boundary : fallback
 }
 
 // ============================================
@@ -148,12 +185,13 @@ async function presentConfigAlert() {
 async function createWidget() {
   const widget = Widget.createWidget({
     url: userConfig.widgetUrl,
-    refreshMinutes: 1,
     padding: [0, 16, 0, 16],
     theme: themeConfig
   })
 
+  const now = new Date()
   const events = await Calendar_.getUpcomingEvents(userConfig.eventCount, 365)
+  widget.refreshAfterDate = nextRefreshDate(events, now)
 
   if (events.length === 0) {
     const emptyText = widget.addText("No upcoming events")
@@ -175,7 +213,7 @@ async function createWidget() {
 
     eventStack.addSpacer()
 
-    const timeText = eventStack.addText(formatRelativeTime(event))
+    const timeText = addTimeLabel(eventStack, event, now)
     timeText.textColor = Theme.getTextColor(themeConfig)
     timeText.font = Theme.getFont(fontSize * 0.75, { theme: themeConfig })
     timeText.lineLimit = 1
