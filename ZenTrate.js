@@ -179,8 +179,8 @@ function createPosterWidget(layout, size) {
 }
 
 /**
- * Draws biggest first, so smaller names land on top; each clears a backdrop
- * in the background color to stay readable over a big one
+ * Draws biggest first, so smaller names land on top. Nothing is filled: any
+ * fill shows as a box when iOS tints or clears the widget background
  */
 function drawPoster(layout, size) {
   const ctx = new DrawContext()
@@ -189,14 +189,9 @@ function drawPoster(layout, size) {
   ctx.opaque = false
 
   const textColor = Theme.getTextColor(themeConfig)
-  const backgroundColor = Theme.getBackgroundColor(themeConfig)
   const toRect = r => new Rect(r.x, r.y, r.w, r.h)
 
   for (const entry of layout.entries) {
-    if (entry.knockoutRect) {
-      ctx.setFillColor(backgroundColor)
-      ctx.fillRect(toRect(entry.knockoutRect))
-    }
     ctx.setFont(Theme.getFont(entry.fontSize, { theme: themeConfig }))
     ctx.setTextColor(textColor)
     if (entry.align === 'center') ctx.setTextAlignedCenter()
@@ -212,7 +207,9 @@ function blankImage(width, height) {
   ctx.size = new Size(Math.max(1, Math.round(width)), Math.max(1, Math.round(height)))
   ctx.opaque = false
   ctx.respectScreenScale = false
-  ctx.setFillColor(new Color(themeConfig.bgColor, 0.02))
+  // getImage() returns null until something is drawn; a clear fill counts
+  // without showing up even when iOS tints the widget
+  ctx.setFillColor(new Color(themeConfig.bgColor, 0))
   ctx.fillRect(new Rect(0, 0, ctx.size.width, ctx.size.height))
   return ctx.getImage()
 }

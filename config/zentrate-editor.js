@@ -29,7 +29,7 @@ const Page = importModule("config/zentrate-editor-page")
 // in Node and in the WebView.
 const { parseTime, toMinutes, toDay, isMinuteInWindow, isDayInRange, isScheduledAt } = DateTime
 const { columnItems, describeConstraints, usageFontSize, sortItems, posterLayout, fitRows, DAY_LETTERS,
-  COLUMNS, POSTER_PADDING, GLYPH_WIDTH, LINE_HEIGHT } = ZenTrateConfig
+  COLUMNS, POSTER_PADDING, LINE_HEIGHT } = ZenTrateConfig
 const { normalize, capitalize, search, shortcutItem, CATALOG } = Schemes
 
 // ============================================
@@ -342,7 +342,6 @@ function pageScript() {
     `const DAY_LETTERS = ${scriptJSON(DAY_LETTERS)}`,
     `const COLUMNS = ${scriptJSON(COLUMNS)}`,
     `const POSTER_PADDING = ${scriptJSON(POSTER_PADDING)}`,
-    `const GLYPH_WIDTH = ${scriptJSON(GLYPH_WIDTH)}`,
     `const LINE_HEIGHT = ${scriptJSON(LINE_HEIGHT)}`,
     `const PREVIEW_SIZE = ${scriptJSON(PREVIEW_SIZE)}`,
     `const CATALOG = ${scriptJSON(CATALOG)}`,

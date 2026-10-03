@@ -120,6 +120,8 @@ class DrawContext {
   setFillColor(color) { this.ops.push({ op: "setFillColor", color }) }
   fillRect(rect) { this.ops.push({ op: "fillRect", rect }) }
   getImage() {
+    // On device a context nothing was drawn into yields no image
+    if (!this.ops.some(op => op.op === "fillRect" || op.op === "drawTextInRect")) return null
     return { type: "image", ops: this.ops.slice(), size: this.size, respectScreenScale: this.respectScreenScale, opaque: this.opaque }
   }
 }

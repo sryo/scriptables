@@ -46,7 +46,6 @@ header { display: flex; align-items: baseline; justify-content: space-between; m
   position: absolute; left: 0; top: 0; transform-origin: 0 0;
   font-family: var(--font); font-weight: var(--weight); font-style: var(--style);
 }
-.poster .ko { position: absolute; background: var(--bg); }
 .poster .ptext { position: absolute; white-space: nowrap; line-height: 1.2; }
 .preview .empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
 .empty { grid-column: 1 / -1; align-self: center; text-align: center; color: var(--muted); font: 14px -apple-system, system-ui, sans-serif; }
@@ -385,11 +384,6 @@ function editorApp(initial, sizes) {
       node.style.height = rect.h + "px"
     }
     for (const entry of poster.entries) {
-      if (entry.knockoutRect) {
-        const ko = el("div", "ko")
-        place(ko, entry.knockoutRect)
-        canvas.append(ko)
-      }
       const text = el("div", "ptext", entry.name)
       place(text, entry.textRect)
       text.style.fontSize = entry.fontSize + "px"

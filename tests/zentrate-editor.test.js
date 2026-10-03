@@ -88,8 +88,8 @@ test("previewPoster lays out only the items visible at that time, exactly like t
   const expected = M.posterLayout([cfg.items[0], cfg.items[2]], {
     width: 338, height: 158, padding: M.POSTER_PADDING, minSize: 10, maxSize: 40, stats, maxUsage: 10
   })
-  assert.deepEqual(poster.entries.map(e => [e.name, e.fontSize, e.textRect, e.knockoutRect]),
-    expected.entries.map(e => [e.name, e.fontSize, e.textRect, e.knockoutRect]))
+  assert.deepEqual(poster.entries.map(e => [e.name, e.fontSize, e.textRect]),
+    expected.entries.map(e => [e.name, e.fontSize, e.textRect]))
 })
 
 test("usageFontSize keeps ZenTrate's curve", () => {

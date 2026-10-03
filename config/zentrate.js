@@ -373,8 +373,6 @@ function usageFontSize(usageCount, maxUsage, minSize, maxSize) {
 }
 
 const POSTER_PADDING = { h: 16, v: 8 }
-// Rough average glyph width as a share of the font size, for sizing backdrops
-const GLYPH_WIDTH = 0.6
 const LINE_HEIGHT = 1.2
 
 /**
@@ -389,7 +387,7 @@ const LINE_HEIGHT = 1.2
  *   stats, maxUsage }; maxUsage defaults to the highest count among items
  * @returns {Object} { rows, rowHeights, rowTops, columns, entries }, entries ordered
  *   biggest first (draw order), each { name, item, column, row, fontSize,
- *   align, textRect, tapRect, knockoutRect? } with rects as { x, y, w, h }
+ *   align, textRect, tapRect } with rects as { x, y, w, h }
  */
 function posterLayout(items, options) {
   const { width, height, minSize, maxSize } = options
@@ -414,12 +412,6 @@ function posterLayout(items, options) {
   const cellWidth = width / columns.length
   const contentWidth = width - 2 * padding.h
 
-  const alignedX = boxWidth => ({
-    left: padding.h,
-    center: padding.h + (contentWidth - boxWidth) / 2,
-    right: padding.h + contentWidth - boxWidth
-  })
-
   const entries = []
   for (let row = 0; row < rows; row++) {
     const rowCenter = rowTops[row] + rowHeights[row] / 2
@@ -428,22 +420,17 @@ function posterLayout(items, options) {
       if (!item) return
       const fontSize = sizeOf(item)
       const textHeight = fontSize * 1.25
-      const knockoutWidth = Math.min(GLYPH_WIDTH * fontSize * item.name.length, contentWidth)
-      const knockoutHeight = fontSize * 1.15
       // Big text in an edge row is nudged inward so the widget edge doesn't clip it
       const textCenter = Math.min(Math.max(rowCenter, textHeight / 2), height - textHeight / 2)
       entries.push({
         name: item.name, item, column, row, fontSize, align: column,
         textRect: { x: padding.h, y: textCenter - textHeight / 2, w: contentWidth, h: textHeight },
-        tapRect: { x: index * cellWidth, y: rowTops[row], w: cellWidth, h: rowHeights[row] },
-        knockoutRect: { x: alignedX(knockoutWidth)[column], y: textCenter - knockoutHeight / 2, w: knockoutWidth, h: knockoutHeight }
+        tapRect: { x: index * cellWidth, y: rowTops[row], w: cellWidth, h: rowHeights[row] }
       })
     })
   }
 
   entries.sort((a, b) => b.fontSize - a.fontSize)
-  // The biggest text sits underneath everything, so it clears nothing
-  if (entries.length) delete entries[0].knockoutRect
   return { rows, rowHeights, rowTops, columns, entries }
 }
 
@@ -565,7 +552,6 @@ module.exports = {
   DAY_LETTERS,
   usageFontSize,
   POSTER_PADDING,
-  GLYPH_WIDTH,
   LINE_HEIGHT,
   fitRows,
   posterLayout,

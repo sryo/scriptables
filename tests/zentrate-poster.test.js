@@ -88,27 +88,9 @@ test("the biggest item is drawn first, underneath the rest", () => {
   assert.deepEqual(sizes, [...sizes].sort((a, b) => b - a))
 })
 
-test("every item but the biggest clears a backdrop sized to its estimated text", () => {
-  const result = layout([item("Big", "left"), item("Mail", "left"), item("Go", "right"), item("Mid", "center")], { Big: 1000 })
-  assert.equal(result.entries[0].name, "Big")
-  assert.equal(result.entries[0].knockoutRect, undefined)
-
-  const mail = entry(result, "Mail")
-  assert.equal(mail.knockoutRect.x, 16)
-  close(mail.knockoutRect.w, 0.6 * 10 * 4)
-  close(mail.knockoutRect.h, 10 * 1.15)
-  close(center(mail.knockoutRect), center(mail.textRect))
-  const go = entry(result, "Go")
-  close(go.knockoutRect.x + go.knockoutRect.w, 364 - 16, "right items clear from the right edge")
-  const mid = entry(result, "Mid")
-  close(mid.knockoutRect.x + mid.knockoutRect.w / 2, 364 / 2, "center items clear around the axis")
-})
-
-test("a backdrop is never wider than the content", () => {
-  const result = layout([item("Big", "left"), item("A name far too long to fit on one widget row ".repeat(2), "right")], { Big: 1000 })
-  const long = result.entries[1]
-  assert.equal(long.knockoutRect.w, 364 - 32)
-  assert.equal(long.knockoutRect.x, 16)
+test("no item paints a backdrop: names are drawn straight onto the widget", () => {
+  const result = layout([item("Big", "left"), item("Mail", "left"), item("Go", "right")], { Big: 1000 })
+  result.entries.forEach(e => assert.equal(e.knockoutRect, undefined))
 })
 
 test("a 40pt item overflows its row in an 8-row widget: overlap is allowed", () => {
@@ -184,16 +166,18 @@ test("every visible item is drawn at its usage font size, not shrunk", async () 
   assert.equal(byName.Whatsapp.rect.width, 338 - 32)
 })
 
-test("smaller items clear their backdrop with the background color before drawing", async () => {
+// Any visible fill shows up as a box when iOS tints or clears the widget background
+test("the drawn image paints no fills and tap cells only fully transparent ones", async () => {
   const rt = await render([item("Big", "left"), item("Small", "right")], { stats: { Big: 1000 } })
-  const ops = rt.widget.backgroundImage.ops
-  const fill = ops.findIndex(op => op.op === "fillRect")
-  const small = ops.findIndex(op => op.op === "drawTextInRect" && op.text === "Small")
-  const big = ops.findIndex(op => op.op === "drawTextInRect" && op.text === "Big")
-  assert.ok(big < fill && fill < small)
-  assert.equal(ops.filter(op => op.op === "fillRect").length, 1)
-  const color = ops.slice(0, fill).reverse().find(op => op.op === "setFillColor").color
-  assert.deepEqual(color, rt.widget.backgroundColor)
+  assert.equal(rt.widget.backgroundImage.ops.filter(op => op.op === "fillRect").length, 0)
+  for (const row of rowsOf(rt)) {
+    for (const cell of row.children.filter(c => c.url)) {
+      const image = cell.children.find(c => c.type === "image").image
+      assert.ok(image, "the blank image exists")
+      for (const op of image.ops.filter(op => op.op === "setFillColor")) assert.equal(op.color.alpha, 0)
+      assert.equal(cell.backgroundColor ?? null, null)
+    }
+  }
 })
 
 test("tap cells tile the whole widget and hold each item's URL at its row and column", async () => {
@@ -292,9 +276,8 @@ test("big text in the first or last row is pulled inside the widget instead of b
   const items = Array.from({ length: 8 }, (_, i) => item(`L${i}`, "left"))
   const result = layout(items, { L0: 1000, L7: 1000 }, { maxSize: 40 })
   for (const name of ["L0", "L7"]) {
-    const { textRect, knockoutRect } = entry(result, name)
+    const { textRect } = entry(result, name)
     assert.ok(textRect.y >= 0, `${name} top inside`)
     assert.ok(textRect.y + textRect.h <= 170, `${name} bottom inside`)
-    if (knockoutRect) assert.ok(knockoutRect.y >= 0 && knockoutRect.y + knockoutRect.h <= 170)
   }
 })
