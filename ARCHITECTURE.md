@@ -26,7 +26,7 @@ These are not preferences — Scriptable will not run code that breaks them.
 
 ### `lib/`
 
-Each module owns one concern. Current contents: `fs`, `theme`, `widget`, `datetime`, `validate`, `calendar`, `ui`.
+Each module owns one concern. Current contents: `fs`, `theme`, `widget`, `datetime`, `validate`, `calendar`, `schemes`.
 
 **The rule that defines `lib/`: a module here must not know any specific widget's filename, schema, or behavior.** If a constant or function is widget-specific, it doesn't belong here.
 
@@ -67,7 +67,7 @@ Theme JSON files. Shipped defaults (committed to git) plus any user-created them
 ## Adding a new widget
 
 1. Create `Zen<Name>.js` at the root with Scriptable's `// icon-color: ... ; icon-glyph: ... ;` header on line 3.
-2. Import only the `lib/*` modules you actually need (`Theme`, `Widget`, `DateTime`, `Calendar_`, `Validate`, `UI`, `Fs`).
+2. Import only the `lib/*` modules you actually need (`Theme`, `Widget`, `DateTime`, `Calendar_`, `Validate`, `Fs`).
 3. If the widget's config is shared with another widget (e.g. an editor), put it in `config/<name>.js`. Otherwise inline at the top — see `ZenDigest.js`.
 4. If the widget reads the calendar or reminders, prefer the existing `lib/calendar.js` helpers over rolling your own.
 5. Add `tests/<name>.test.js`, then test on-device before committing.
