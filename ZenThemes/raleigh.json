@@ -3,6 +3,7 @@
   "author": "sryo",
   "bgColor": "EE0000",
   "textColor": "FFFFFF",
+  "accentColor": "151515",
   "fontName": "AvenirNext-Bold",
   "fontWeight": "bold",
   "fontItalic": false,

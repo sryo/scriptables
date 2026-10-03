@@ -115,98 +115,143 @@ test("getFont passes PostScript names through with their original case", () => {
 
 test("getFont maps the generic families case-insensitively", () => {
   const Theme = createRuntime().require("lib/theme")
-  assert.equal(Theme.getFont(10, { theme: { fontName: "Serif" } }).name, "serif")
+  // Scriptable has no serif system factory, so serif draws Times New Roman faces
+  assert.equal(Theme.getFont(10, { theme: { fontName: "Serif", fontWeight: "regular" } }).name, "TimesNewRomanPSMT")
   assert.equal(Theme.getFont(10, { theme: { fontName: "System", fontWeight: "Medium" } }).name, "medium")
   assert.equal(Theme.getFont(10, { theme: { fontName: "system", fontItalic: true } }).name, "italic")
 })
 
-// ---------- ZenTheme.js ----------
+// ---------- storage ----------
 
-/** Fills the editor alert with `values` (by field key) and taps Save. */
-function fill(values) {
-  const KEYS = ["name", "author", "bgColor", "textColor", "fontName", "fontWeight", "fontItalic", "minFontSize", "maxFontSize"]
-  return alert => {
-    KEYS.forEach((k, i) => { if (k in values) alert.fields[i].value = String(values[k]) })
-    return 0
+const stored = (rt, p) => JSON.parse(rt.files.get(p))
+
+test("loadTheme returns a normalized theme", () => {
+  const rt = createRuntime({ files: { "zen_theme.json": { name: "S", minFontSize: "30", maxFontSize: "12", bgColor: "#abcdef", fontItalic: "false" } } })
+  const t = rt.require("lib/theme").loadTheme()
+  assert.deepEqual([t.minFontSize, t.maxFontSize, t.bgColor, t.fontItalic, t.appearance], [12, 30, "ABCDEF", false, "auto"])
+})
+
+test("saveAsNew never overwrites an existing theme: it picks a unique filename", () => {
+  const rt = createRuntime({ files: { "ZenThemes/noir.json": theme("Noir") } })
+  const Theme = rt.require("lib/theme")
+  assert.equal(Theme.saveAsNew({ name: "Noir", bgColor: "222222" }), "noir-2.json")
+  assert.equal(Theme.saveAsNew({ name: "Noir", bgColor: "333333" }), "noir-3.json")
+  assert.equal(stored(rt, "/docs/ZenThemes/noir.json").bgColor, "111111")
+  assert.equal(stored(rt, "/docs/ZenThemes/noir-2.json").bgColor, "222222")
+})
+
+test("saved themes never persist filename or source", () => {
+  const rt = createRuntime({ files: { "ZenThemes/a.json": theme("Alpha") } })
+  const Theme = rt.require("lib/theme")
+  const [alpha] = Theme.loadAllThemes()
+  assert.equal(alpha.filename, "a.json")
+  Theme.updateTheme("a.json", { ...alpha, source: "a.json", bgColor: "444444" })
+  const fname = Theme.saveAsNew({ ...alpha, name: "Copy" })
+  for (const p of ["/docs/ZenThemes/a.json", `/docs/ZenThemes/${fname}`]) {
+    const json = stored(rt, p)
+    assert.ok(!("filename" in json), p)
+    assert.ok(!("source" in json), p)
   }
-}
-
-test("ZenTheme lists themes still downloading from iCloud and does not overwrite noir.json", async () => {
-  const files = new Map([
-    ["/docs/ZenThemes/noir.json", theme("Noir", { maxFontSize: 40 })],
-    ["/docs/ZenThemes/zen.json", theme("Zen")]
-  ])
-  const fm = makeICloud(files, new Set(files.keys()))
-  let listed
-  const rt = createRuntime({
-    globals: { FileManager: { iCloud: () => fm, local: () => fm } },
-    alertResponses: [a => { listed = a.actions.slice(); return -1 }]
-  })
-  await rt.runScript("ZenTheme.js", { runsInApp: true })
-  assert.deepEqual(listed, ["Noir", "Zen", "New Theme"])
-  assert.equal(JSON.parse(files.get("/docs/ZenThemes/noir.json")).maxFontSize, 40)
+  assert.equal(stored(rt, "/docs/ZenThemes/a.json").bgColor, "444444")
 })
 
-test("ZenTheme rejects a min font size of 0 instead of silently using 10", async () => {
-  const rt = createRuntime({
-    files: { "ZenThemes/noir.json": theme("Noir") },
-    alertResponses: [1, fill({ name: "Tiny", minFontSize: "0", maxFontSize: "20" }), 0, -1]
-  })
-  await rt.runScript("ZenTheme.js", { runsInApp: true })
-  assert.equal(rt.alerts[2].title, "Validation Error")
-  assert.match(rt.alerts[2].message, /Min font size/)
-  assert.ok(!rt.files.has("/docs/ZenThemes/tiny.json"))
+test("updateTheme keeps the filename even when the name changes, and refreshes the active copy", () => {
+  const rt = createRuntime({ files: { "ZenThemes/a.json": theme("Alpha"), "zen_theme.json": theme("Alpha", { source: "a.json" }) } })
+  const Theme = rt.require("lib/theme")
+  assert.equal(Theme.updateTheme("a.json", { name: "Renamed", bgColor: "555555" }), "a.json")
+  assert.equal(stored(rt, "/docs/ZenThemes/a.json").name, "Renamed")
+  assert.ok(!rt.files.has("/docs/ZenThemes/renamed.json"))
+  assert.equal(stored(rt, NEW).bgColor, "555555")
+  assert.equal(stored(rt, NEW).source, "a.json")
 })
 
-test("ZenTheme rejects non-numeric font sizes", async () => {
-  const rt = createRuntime({
-    files: { "ZenThemes/noir.json": theme("Noir") },
-    alertResponses: [1, fill({ name: "Junk", minFontSize: "abc", maxFontSize: "20" }), 0, -1]
-  })
-  await rt.runScript("ZenTheme.js", { runsInApp: true })
-  assert.equal(rt.alerts[2].title, "Validation Error")
+test("updateTheme refuses filenames outside ZenThemes/", () => {
+  const Theme = createRuntime().require("lib/theme")
+  assert.throws(() => Theme.updateTheme("../zen_theme.json", { name: "X" }))
 })
 
-test("ZenTheme keeps what the user typed when asking them to fix a validation error", async () => {
-  const rt = createRuntime({
-    files: { "ZenThemes/noir.json": theme("Noir") },
-    alertResponses: [1, fill({ name: "Sunset", bgColor: "zzz" }), 0, -1]
-  })
-  await rt.runScript("ZenTheme.js", { runsInApp: true })
-  const retry = rt.alerts[3]
-  assert.equal(retry.fields[0].value, "Sunset")
-  assert.equal(retry.fields[2].value, "zzz")
+test("picking a theme records its source in the active theme instead of copying filename", () => {
+  const rt = createRuntime({ files: { "ZenThemes/a.json": theme("Alpha") } })
+  const Theme = rt.require("lib/theme")
+  Theme.saveTheme(Theme.loadAllThemes()[0])
+  const active = stored(rt, NEW)
+  assert.equal(active.source, "a.json")
+  assert.ok(!("filename" in active))
+  assert.equal(Theme.loadAllThemes()[0].active, true)
 })
 
-test("ZenTheme saves a new theme with numeric sizes, clean hex and a safe filename", async () => {
-  const rt = createRuntime({
-    files: { "ZenThemes/noir.json": theme("Noir") },
-    alertResponses: [1, fill({ name: " AC/DC ", bgColor: "#abcdef", minFontSize: "12", maxFontSize: "24" }), 0]
-  })
-  await rt.runScript("ZenTheme.js", { runsInApp: true })
-  const saved = JSON.parse(rt.files.get("/docs/ZenThemes/ac-dc.json"))
-  assert.equal(saved.name, "AC/DC")
-  assert.equal(saved.bgColor, "ABCDEF")
-  assert.equal(saved.minFontSize, 12)
-  assert.equal(saved.maxFontSize, 24)
-  assert.equal(JSON.parse(rt.files.get(NEW)).name, "AC/DC")
+test("applyTheme activates a theme by filename", () => {
+  const rt = createRuntime({ files: { "ZenThemes/a.json": theme("Alpha"), "ZenThemes/b.json": theme("Beta") } })
+  const Theme = rt.require("lib/theme")
+  Theme.applyTheme("b.json")
+  assert.equal(Theme.loadTheme().name, "Beta")
+  assert.equal(stored(rt, NEW).source, "b.json")
 })
 
-test("ZenTheme keeps the current accent color on a new theme", async () => {
-  const rt = createRuntime({
-    files: { "ZenThemes/noir.json": theme("Noir"), "zen_theme.json": theme("Mine", { accentColor: "FF2D55" }) },
-    alertResponses: [1, fill({ name: "Mine 2" }), 0]
-  })
-  await rt.runScript("ZenTheme.js", { runsInApp: true })
-  assert.equal(JSON.parse(rt.files.get("/docs/ZenThemes/mine-2.json")).accentColor, "FF2D55")
-  assert.equal(JSON.parse(rt.files.get(NEW)).accentColor, "FF2D55")
+test("deleteTheme refuses the active theme's source and deletes others", () => {
+  const rt = createRuntime({ files: { "ZenThemes/a.json": theme("Alpha"), "ZenThemes/b.json": theme("Beta"), "zen_theme.json": theme("Alpha", { source: "a.json" }) } })
+  const Theme = rt.require("lib/theme")
+  const refused = Theme.deleteTheme("a.json")
+  assert.equal(refused.ok, false)
+  assert.match(refused.error, /activo/)
+  assert.ok(rt.files.has("/docs/ZenThemes/a.json"))
+  assert.equal(Theme.deleteTheme("b.json").ok, true)
+  assert.ok(!rt.files.has("/docs/ZenThemes/b.json"))
 })
 
-test("ZenTheme applies a picked theme", async () => {
-  const rt = createRuntime({
-    files: { "ZenThemes/a.json": theme("Alpha"), "ZenThemes/b.json": theme("Beta") },
-    alertResponses: [1, 0]
-  })
-  await rt.runScript("ZenTheme.js", { runsInApp: true })
-  assert.equal(JSON.parse(rt.files.get(NEW)).name, "Beta")
+test("saveThemeToFolder never overwrites a different theme stored under the same filename", () => {
+  const rt = createRuntime({ files: { "ZenThemes/noir.json": theme("Noir") } })
+  const Theme = rt.require("lib/theme")
+  assert.equal(Theme.saveThemeToFolder({ name: "Other" }, "noir.json"), "other.json")
+  assert.equal(stored(rt, "/docs/ZenThemes/noir.json").name, "Noir")
+  assert.equal(Theme.saveThemeToFolder({ name: "Noir", bgColor: "777777" }, "noir.json"), "noir.json")
+  assert.equal(stored(rt, "/docs/ZenThemes/noir.json").bgColor, "777777")
+})
+
+// ---------- Scriptable colors and fonts ----------
+
+const VARIANT = { name: "V", bgColor: "000000", textColor: "FFFFFF", accentColor: "0A84FF", light: { bgColor: "FFFFFF", textColor: "111111", accentColor: "007AFF" } }
+
+test("colors are dynamic only for an auto theme with variants", () => {
+  const Theme = createRuntime().require("lib/theme")
+  assert.deepEqual(Theme.getBackgroundColor(VARIANT), { light: { hex: "#FFFFFF", alpha: 1 }, dark: { hex: "#000000", alpha: 1 } })
+  assert.deepEqual(Theme.getTextColor(VARIANT), { light: { hex: "#111111", alpha: 1 }, dark: { hex: "#FFFFFF", alpha: 1 } })
+  assert.deepEqual(Theme.getAccentColor(VARIANT), { light: { hex: "#007AFF", alpha: 1 }, dark: { hex: "#0A84FF", alpha: 1 } })
+  assert.deepEqual(Theme.getTextColor({ ...VARIANT, appearance: "light" }), { hex: "#111111", alpha: 1 })
+  assert.deepEqual(Theme.getTextColor({ ...VARIANT, appearance: "dark" }), { hex: "#FFFFFF", alpha: 1 })
+  assert.deepEqual(Theme.getBackgroundColor({ bgColor: "123456" }), { hex: "#123456", alpha: 1 })
+})
+
+test("an invalid color falls back to the same default in the widget and the editor", () => {
+  const rt = createRuntime()
+  const Theme = rt.require("lib/theme")
+  const E = rt.require("config/zentrate-editor")
+  const bad = { bgColor: "zzz", textColor: "nope" }
+  assert.equal(Theme.getBackgroundColor(bad).hex, "#" + Theme.DEFAULT_THEME.bgColor)
+  assert.equal(Theme.getTextColor(bad).hex, "#" + Theme.DEFAULT_THEME.textColor)
+  const tokens = E.themeTokens(bad)
+  assert.equal(tokens.bg, "#" + Theme.DEFAULT_THEME.bgColor)
+  assert.equal(tokens.text, "#" + Theme.DEFAULT_THEME.textColor)
+})
+
+test("resolveForRender follows the device appearance unless the theme forces one", () => {
+  const dark = createRuntime({ dark: true }).require("lib/theme")
+  const light = createRuntime({ dark: false }).require("lib/theme")
+  assert.equal(dark.resolveForRender(VARIANT).bgColor, "000000")
+  assert.equal(light.resolveForRender(VARIANT).bgColor, "FFFFFF")
+  assert.equal(light.resolveForRender({ ...VARIANT, appearance: "dark" }).bgColor, "000000")
+  assert.equal(dark.resolveForRender({ ...VARIANT, appearance: "light" }).textColor, "111111")
+})
+
+test("getFont applies the theme weight to custom families", () => {
+  const Theme = createRuntime().require("lib/theme")
+  assert.equal(Theme.getFont(14, { theme: { fontName: "Avenir Next", fontWeight: "bold" } }).name, "AvenirNext-Bold")
+  assert.equal(Theme.getBoldFont(14, { fontName: "Georgia", fontWeight: "regular" }).name, "Georgia-Bold")
+  assert.equal(Theme.getRegularFont(14, { fontName: "Georgia", fontWeight: "bold" }).name, "Georgia")
+})
+
+test("getFont builds rounded and mono from Scriptable's weighted factories", () => {
+  const Theme = createRuntime().require("lib/theme")
+  assert.equal(Theme.getFont(10, { theme: { fontName: "rounded", fontWeight: "bold" } }).name, "boldRounded")
+  assert.equal(Theme.getFont(10, { theme: { fontName: "monospaced", fontWeight: "regular" } }).name, "regularMonospaced")
 })

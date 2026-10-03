@@ -57,7 +57,7 @@ header { display: flex; align-items: baseline; justify-content: space-between; m
   min-width: 36px; height: 32px; padding: 0 10px; border-radius: 16px;
   border: 1px solid var(--line); background: transparent; font-size: 14px;
 }
-.pill.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.pill.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 .scrub-row { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
 input[type=range] { flex: 1; accent-color: var(--accent); }
 
@@ -94,7 +94,7 @@ input[type=range] { flex: 1; accent-color: var(--accent); }
 .row > .field, .row > input { flex: 1; min-width: 0; }
 .wrap { flex-wrap: wrap; }
 .btn { background: var(--fill); border: 0; border-radius: 10px; padding: 10px 14px; font-size: 15px; white-space: nowrap; }
-.btn.accent { background: var(--accent); color: #fff; }
+.btn.accent { background: var(--accent); color: var(--on-accent); }
 .btn.danger { color: var(--danger); width: 100%; margin-top: 24px; }
 .btn:disabled { opacity: .35; }
 .link { background: none; border: 0; color: var(--accent); font-size: 16px; padding: 4px 0; }
@@ -141,6 +141,57 @@ input[type=time] { min-height: 44px; }
   transform: translateY(160%); transition: transform .25s;
 }
 .toast.show { transform: none; }
+.section-head { display: flex; align-items: baseline; justify-content: space-between; }
+.link.small { font-size: 14px; }
+.theme-strip {
+  display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch;
+  margin: 10px -16px 0; padding: 6px 16px 4px; scroll-padding: 0 16px; scrollbar-width: none;
+}
+.theme-strip::-webkit-scrollbar { display: none; }
+.tchip {
+  flex: 0 0 72px; width: 72px; height: 88px; padding: 0; border: 0; background: none; scroll-snap-align: start;
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
+}
+.tswatch { position: relative; flex: 0 0 56px; width: 72px; height: 56px; border-radius: 12px; overflow: hidden; border: 1px solid var(--line); }
+.tchip[aria-pressed="true"] .tswatch { outline: 2px solid var(--accent); outline-offset: 2px; }
+.tlayer { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
+.tlayer.half-light { clip-path: polygon(0 0, 100% 0, 0 100%); }
+.tlayer.half-dark { clip-path: polygon(100% 0, 100% 100%, 0 100%); }
+.taa { font-size: 22px; line-height: 1; }
+.tdot { position: absolute; right: 7px; bottom: 7px; width: 8px; height: 8px; border-radius: 50%; }
+.tname { font-size: 12px; max-width: 72px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tnew .tswatch { border-style: dashed; display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 24px; }
+
+.preview.mini { margin-top: 12px; }
+.color-row { margin-top: 14px; }
+.color-row > span { display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+.swatches { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.swatch { width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--line); padding: 0; }
+.swatch.on { outline: 2px solid var(--accent); outline-offset: 2px; }
+.cpick {
+  position: relative; width: 30px; height: 30px; border-radius: 50%; border: 1px dashed var(--line);
+  display: inline-flex; align-items: center; justify-content: center; color: var(--muted); overflow: hidden;
+}
+.cpick input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; border: 0; padding: 0; }
+input.hex { flex: 0 0 92px; width: 92px; padding: 6px 8px; font: 14px ui-monospace, Menlo, monospace; text-transform: uppercase; }
+.contrast { display: inline-block; margin: 14px 0 0; font-size: 12px; border: 1px solid; border-radius: 8px; padding: 3px 8px; }
+.contrast.good { color: #30D158; }
+.contrast.warn { color: #FF9F0A; }
+.font-cards { display: flex; gap: 8px; overflow-x: auto; scroll-snap-type: x proximity; margin: 0 -16px; padding: 0 16px 4px; scrollbar-width: none; }
+.font-cards::-webkit-scrollbar { display: none; }
+.fcard {
+  flex: 0 0 auto; min-width: 104px; border: 1px solid var(--line); background: var(--fill);
+  border-radius: 12px; padding: 10px 12px; text-align: left; scroll-snap-align: start;
+}
+.fcard.on { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.fcard .sample { display: block; font-size: 20px; line-height: 1.3; white-space: nowrap; }
+.fcard small { display: block; font-size: 11px; color: var(--muted); margin-top: 4px; white-space: nowrap; }
+.pill:disabled { opacity: .3; }
+#t-weights { margin-top: 10px; }
+.size-label { font-size: 15px; font-weight: 600; }
+.slider-row { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+.slider-row > span { flex: 0 0 52px; font-size: 13px; color: var(--muted); }
 `
 
 const BODY = `
@@ -154,6 +205,12 @@ const BODY = `
     <button class="pill" id="scrub-now">Ahora</button>
   </div>
 </div>
+<section id="tema" aria-label="Tema">
+  <div class="section-head"><div class="section-title">Tema</div><button class="link small" id="theme-edit">Editar</button></div>
+  <div class="segmented" id="appearance"></div>
+  <div class="theme-strip" id="theme-strip" role="group" aria-label="Temas"></div>
+  <p class="hint">Tocá para aplicar. Mantené presionado para editar. Se aplica a ZenTrate, ZenLendar y ZenDigest.</p>
+</section>
 <div class="section-title">Orden</div>
 <div class="segmented" id="sort"></div>
 <div class="section-title">Elementos</div>
@@ -227,12 +284,38 @@ const ADD_SHEET = `
 <p class="error" id="a-error"></p>
 `
 
+const THEME_SHEET = `
+<div class="sheet-head"><h2>Editar tema</h2><button class="link" id="s-close">Listo</button></div>
+<p class="error" id="t-error"></p>
+<section class="preview mini" id="t-preview" aria-label="Vista previa del tema"></section>
+<label class="field"><span>Nombre</span><input type="text" id="t-name" autocomplete="off"></label>
+<p class="error" id="te-name"></p>
+<label class="switch-row field"><span>Distinto en modo claro/oscuro</span><input type="checkbox" class="switch" id="t-variants"></label>
+<div class="field" id="t-variant-box"><span>Variante</span><div class="segmented" id="t-variant"></div></div>
+<div id="t-colors"></div>
+<p class="contrast" id="t-contrast"></p>
+<h3>Letra</h3>
+<div class="font-cards" id="t-fonts"></div>
+<div class="pills" id="t-weights"></div>
+<label class="switch-row field"><span>Cursiva</span><input type="checkbox" class="switch" id="t-italic"></label>
+<p class="error" id="te-font"></p>
+<h3>Tamaño</h3>
+<div class="size-label" id="t-size-label"></div>
+<label class="slider-row"><span>Chico</span><input type="range" id="t-min" min="8" max="72" step="1"></label>
+<label class="slider-row"><span>Grande</span><input type="range" id="t-max" min="8" max="72" step="1"></label>
+<p class="hint">Lo que más usás se ve Grande; lo demás, Chico. Si los igualás, todo queda del mismo tamaño.</p>
+<p class="error" id="te-size"></p>
+<div class="row" style="margin-top:24px"><button class="btn" id="t-duplicate">Duplicar</button></div>
+<button class="btn danger" id="t-delete">Eliminar tema</button>
+<p class="error" id="t-delete-error"></p>
+`
+
 /**
  * The page's UI. Runs in the WebView only.
  * @param {Object} initial - State from buildState()
- * @param {Object} sizes - { minSize, maxSize } of the active theme
+ * @param {Object} options - { focus: "tema" | null }
  */
-function editorApp(initial, sizes) {
+function editorApp(initial, options) {
   let S = initial
   const COLS = [["left", "Izquierda", "Izq"], ["center", "Centro", "Centro"], ["right", "Derecha", "Der"]]
   const ADD_TITLES = { left: "Añadir a la izquierda", center: "Añadir al centro", right: "Añadir a la derecha" }
@@ -260,7 +343,7 @@ function editorApp(initial, sizes) {
 
   function send(msg, onReply) {
     const isOp = msg.type === "op"
-    if (isOp && msg.op !== "undo") hideToast()
+    if (isOp && msg.op !== "undo" && msg.op !== "theme.undoDelete") hideToast()
     if (isOp) {
       pending += 1
       renderStatus()
@@ -286,7 +369,9 @@ function editorApp(initial, sizes) {
     receive(reply) {
       if (reply.state) {
         S = reply.state
+        applyTokens()
         renderMain()
+        renderThemes()
         refreshSheet()
       }
       const handler = handlers[reply.id]
@@ -362,11 +447,19 @@ function editorApp(initial, sizes) {
     renderTraining()
   }
 
-  // Same posterLayout the widget draws with, scaled to the card's width
   function renderPreview(date) {
-    const card = $("preview")
+    renderPoster($("preview"), date, { minSize: S.tokens.minSize, maxSize: S.tokens.maxSize })
+  }
+
+  /**
+   * Same posterLayout the widget draws with, scaled to the card's width.
+   * `look` overrides the page's theme with a draft's colors and font.
+   */
+  function renderPoster(card, date, look) {
     card.textContent = ""
-    const poster = previewPoster(S.config, S.stats, date, sizes.minSize, sizes.maxSize)
+    card.style.background = look.bg || ""
+    card.style.color = look.text || ""
+    const poster = previewPoster(S.config, S.stats, date, look.minSize, look.maxSize)
     const scale = card.clientWidth / poster.width
     card.style.height = poster.height * scale + "px"
     if (!poster.entries.length) {
@@ -374,6 +467,11 @@ function editorApp(initial, sizes) {
       return
     }
     const canvas = el("div", "poster")
+    if (look.font) {
+      canvas.style.fontFamily = look.font
+      canvas.style.fontWeight = look.weight
+      canvas.style.fontStyle = look.style
+    }
     canvas.style.width = poster.width + "px"
     canvas.style.height = poster.height + "px"
     canvas.style.transform = "scale(" + scale + ")"
@@ -641,7 +739,7 @@ function editorApp(initial, sizes) {
       send({ type: "op", op: "delete", name: doomed }, reply => {
         if (reply.type === "error") return showItemError(reply)
         closeSheet()
-        showToast(`«${doomed}» eliminado`)
+        showToast(`«${doomed}» eliminado`, () => send({ type: "op", op: "undo" }))
       })
     })
 
@@ -699,6 +797,7 @@ function editorApp(initial, sizes) {
 
   // Keeps the open sheet in step with saved state without touching what the user is typing
   function refreshSheet() {
+    if (sheet && sheet.kind === "theme") return refreshThemeSheet()
     if (!sheet || sheet.kind !== "item") return
     const item = findItem(sheet.name)
     if (!item) return
@@ -801,16 +900,376 @@ function editorApp(initial, sizes) {
     })
   }
 
+  // ---------- themes ----------
+
+  const APPEARANCE_LABELS = [["auto", "Automático"], ["dark", "Oscuro"], ["light", "Claro"]]
+  const VARIANT_LABELS = [["dark", "Oscuro"], ["light", "Claro"]]
+  const COLOR_ROWS = [
+    ["bgColor", "Fondo", ["000000", "1C1C1E", "0B1F3A", "1E3A2F", "FDF5E6", "F2F2F7", "FFFFFF", "FFE4E1"]],
+    ["textColor", "Texto", ["FFFFFF", "F2F2F7", "EAEAEA", "FDF5E6", "000000", "1C1C1E", "333333", "0B1F3A"]],
+    ["accentColor", "Acento", ["0A84FF", "30D158", "FF9F0A", "FF375F", "BF5AF2", "64D2FF", "FFD60A", "B07D48"]]
+  ]
+  const LONG_PRESS_MS = 400
+  const copy = value => JSON.parse(JSON.stringify(value))
+  const findTheme = filename => (S.themes || []).find(t => t.filename === filename)
+  const activeFilename = () => (S.activeTheme && S.activeTheme.source && findTheme(S.activeTheme.source)) ? S.activeTheme.source : null
+
+  let tokensKey = JSON.stringify(S.tokens)
+  function applyTokens() {
+    const key = JSON.stringify(S.tokens)
+    if (key === tokensKey) return
+    tokensKey = key
+    $("theme-vars").textContent = themeCss(S.tokens)
+  }
+
+  function systemAppearance() {
+    return window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark"
+  }
+
+  function renderThemes() {
+    const box = $("appearance")
+    box.textContent = ""
+    const current = (S.activeTheme && S.activeTheme.appearance) || "auto"
+    for (const [value, label] of APPEARANCE_LABELS) {
+      const button = el("button", value === current ? "on" : "", label)
+      button.setAttribute("aria-pressed", value === current ? "true" : "false")
+      button.addEventListener("click", () => {
+        if (value !== ((S.activeTheme && S.activeTheme.appearance) || "auto")) send({ type: "op", op: "theme.appearance", appearance: value })
+      })
+      box.append(button)
+    }
+
+    const strip = $("theme-strip")
+    const scroll = strip.scrollLeft
+    strip.textContent = ""
+    for (const t of S.themes || []) strip.append(themeChip(t))
+    const add = el("button", "tchip tnew")
+    add.append(el("span", "tswatch", "+"), el("span", "tname", "Nuevo"))
+    add.setAttribute("aria-label", "Nuevo tema")
+    add.addEventListener("click", () => duplicateTheme(activeFilename()))
+    strip.append(add)
+    strip.scrollLeft = scroll
+    $("theme-edit").hidden = !activeFilename()
+  }
+
+  function themeChip(t) {
+    const chip = el("button", "tchip")
+    chip.setAttribute("aria-pressed", t.active ? "true" : "false")
+    chip.setAttribute("aria-label", t.name)
+    const swatch = el("span", "tswatch")
+    const layer = (look, cls) => {
+      const node = el("span", "tlayer" + (cls ? " " + cls : ""))
+      node.style.background = look.bg
+      node.style.color = look.text
+      const aa = el("span", "taa", "Aa")
+      aa.style.fontFamily = t.swatch.font
+      aa.style.fontWeight = t.swatch.weight
+      aa.style.fontStyle = t.swatch.style
+      const dot = el("span", "tdot")
+      dot.style.background = look.accent
+      node.append(aa, dot)
+      return node
+    }
+    if (t.swatch.split) swatch.append(layer(t.swatch.split.light, "half-light"), layer(t.swatch.split.dark, "half-dark"))
+    else swatch.append(layer(t.swatch))
+    chip.append(swatch, el("span", "tname", t.name))
+    attachThemeChip(chip, t.filename)
+    return chip
+  }
+
+  // Long-press opens the editor; its own timer, so the item drag code never sees it
+  let themePress = null
+  let suppressThemeClick = false
+  function cancelThemePress() {
+    if (themePress) clearTimeout(themePress.timer)
+    themePress = null
+  }
+  function attachThemeChip(chip, filename) {
+    chip.addEventListener("touchstart", event => {
+      if (event.touches.length !== 1) return
+      const touch = event.touches[0]
+      cancelThemePress()
+      themePress = {
+        x: touch.clientX,
+        y: touch.clientY,
+        timer: setTimeout(() => {
+          themePress = null
+          suppressThemeClick = true
+          setTimeout(() => { suppressThemeClick = false }, 600)
+          openTheme(filename)
+        }, LONG_PRESS_MS)
+      }
+    }, { passive: true })
+    chip.addEventListener("touchmove", event => {
+      const touch = event.touches[0]
+      if (themePress && (Math.abs(touch.clientX - themePress.x) > 8 || Math.abs(touch.clientY - themePress.y) > 8)) cancelThemePress()
+    }, { passive: true })
+    chip.addEventListener("touchend", cancelThemePress)
+    chip.addEventListener("touchcancel", cancelThemePress)
+    chip.addEventListener("contextmenu", event => event.preventDefault())
+    chip.addEventListener("click", () => {
+      if (suppressThemeClick) return
+      const t = findTheme(filename)
+      if (t && !t.active) send({ type: "op", op: "theme.apply", filename })
+    })
+  }
+  $("theme-edit").addEventListener("click", () => {
+    const filename = activeFilename()
+    if (filename) openTheme(filename)
+  })
+
+  function duplicateTheme(filename) {
+    const msg = { type: "op", op: "theme.duplicate" }
+    if (filename) msg.filename = filename
+    send(msg, reply => {
+      if (reply.type === "error") {
+        if (sheet && sheet.kind === "theme") $("t-error").textContent = reply.error
+        return
+      }
+      if (reply.created) openTheme(reply.created)
+    })
+  }
+
+  // ---------- theme sheet ----------
+
+  function openTheme(filename) {
+    const t = findTheme(filename)
+    if (!t) return
+    const draft = copy(t.theme)
+    const shown = effectiveAppearance(S.activeTheme || draft, systemAppearance())
+    showSheet(THEME_SHEET, { kind: "theme", filename, draft, valid: copy(draft), variant: shown })
+
+    const name = $("t-name")
+    name.value = draft.name
+    blurOnEnter(name)
+    name.addEventListener("input", () => {
+      sheet.draft.name = name.value
+      showThemeErrors(validateTheme(sheet.draft).errors)
+    })
+    name.addEventListener("change", commitTheme)
+
+    $("t-variants").addEventListener("change", () => {
+      sheet.draft = setVariants(sheet.draft, $("t-variants").checked, sheet.variant)
+      commitTheme()
+    })
+    for (const [value, label] of VARIANT_LABELS) {
+      const button = el("button", "", label)
+      button.dataset.variant = value
+      button.addEventListener("click", () => {
+        sheet.variant = value
+        renderThemeSheet()
+      })
+      $("t-variant").append(button)
+    }
+
+    for (const [key, label, presets] of COLOR_ROWS) {
+      const row = el("div", "color-row")
+      row.append(el("span", "", label))
+      const swatches = el("div", "swatches")
+      for (const hex of presets) {
+        const button = el("button", "swatch")
+        button.style.background = "#" + hex
+        button.dataset.hex = hex
+        button.setAttribute("aria-label", label + " #" + hex)
+        button.addEventListener("click", () => setColor(key, hex))
+        swatches.append(button)
+      }
+      const pick = el("label", "cpick", "+")
+      pick.setAttribute("aria-label", "Otro color")
+      const input = document.createElement("input")
+      input.type = "color"
+      input.id = "t-pick-" + key
+      input.addEventListener("input", () => {
+        sheet.draft = setThemeColor(sheet.draft, sheet.variant, key, input.value.slice(1).toUpperCase())
+        if (validateTheme(sheet.draft).ok) sheet.valid = copy(sheet.draft)
+        renderThemeSheet()
+      })
+      input.addEventListener("change", () => setColor(key, input.value.slice(1).toUpperCase()))
+      pick.append(input)
+      const hexInput = el("input", "hex")
+      hexInput.type = "text"
+      hexInput.id = "t-hex-" + key
+      hexInput.setAttribute("aria-label", label + " en hex")
+      hexInput.autocapitalize = "characters"
+      hexInput.spellcheck = false
+      blurOnEnter(hexInput)
+      hexInput.addEventListener("change", () => setColor(key, hexInput.value.trim().replace(/^#/, "")))
+      swatches.append(pick, hexInput)
+      row.append(swatches, el("p", "error", ""))
+      row.lastChild.id = "te-" + key
+      $("t-colors").append(row)
+    }
+
+    for (const family of FONT_CATALOG) {
+      const card = el("button", "fcard")
+      card.dataset.family = family.id
+      card.append(el("span", "sample", "Whatsapp"), el("small", "", family.label))
+      card.addEventListener("click", () => {
+        sheet.draft.fontName = family.id
+        commitTheme()
+      })
+      $("t-fonts").append(card)
+    }
+    $("t-italic").addEventListener("change", () => {
+      sheet.draft.fontItalic = $("t-italic").checked
+      commitTheme()
+    })
+
+    const sliders = { min: $("t-min"), max: $("t-max") }
+    sliders.min.value = draft.minFontSize
+    sliders.max.value = draft.maxFontSize
+    const slide = moved => {
+      let min = Number(sliders.min.value)
+      let max = Number(sliders.max.value)
+      if (min > max) {
+        if (moved === "min") max = min
+        else min = max
+        sliders.min.value = min
+        sliders.max.value = max
+      }
+      sheet.draft.minFontSize = min
+      sheet.draft.maxFontSize = max
+      if (validateTheme(sheet.draft).ok) sheet.valid = copy(sheet.draft)
+      renderThemeSheet()
+    }
+    for (const which of ["min", "max"]) {
+      sliders[which].addEventListener("input", () => slide(which))
+      sliders[which].addEventListener("change", commitTheme)
+    }
+
+    $("t-duplicate").addEventListener("click", () => duplicateTheme(sheet.filename))
+    $("t-delete").addEventListener("click", () => {
+      send({ type: "op", op: "theme.delete", filename: sheet.filename }, reply => {
+        if (reply.type === "error") {
+          if (sheet && sheet.kind === "theme") $("t-delete-error").textContent = reply.error
+          return
+        }
+        closeSheet()
+        showToast(`«${reply.deleted}» eliminado`, () => send({ type: "op", op: "theme.undoDelete" }))
+      })
+    })
+
+    renderThemeSheet()
+  }
+
+  function editedColor(key) {
+    const d = sheet.draft
+    if (d.light || d.dark) {
+      const block = d[sheet.variant] || {}
+      return block[key] !== undefined && block[key] !== "" ? block[key] : d[key]
+    }
+    return d[key]
+  }
+
+  function setColor(key, value) {
+    sheet.draft = setThemeColor(sheet.draft, sheet.variant, key, value)
+    commitTheme()
+  }
+
+  function commitTheme() {
+    const check = validateTheme(sheet.draft)
+    showThemeErrors(check.errors)
+    renderThemeSheet()
+    if (!check.ok) return
+    sheet.valid = copy(sheet.draft)
+    renderThemeSheet()
+    const target = sheet
+    send({ type: "op", op: "theme.update", filename: sheet.filename, theme: copy(sheet.draft) }, reply => {
+      if (reply.type !== "error" || sheet !== target) return
+      if (reply.errors) showThemeErrors(reply.errors)
+      else $("t-error").textContent = reply.error
+    })
+  }
+
+  function showThemeErrors(errors) {
+    if (!sheet || sheet.kind !== "theme") return
+    const other = sheet.variant === "light" ? "dark" : "light"
+    $("te-name").textContent = errors.name || ""
+    for (const [key] of COLOR_ROWS) {
+      $("te-" + key).textContent = errors[`${sheet.variant}.${key}`] || errors[key] || errors[`${other}.${key}`] || errors[sheet.variant] || ""
+    }
+    $("te-font").textContent = errors.fontName || errors.fontWeight || errors.fontItalic || ""
+    $("te-size").textContent = errors.minFontSize || errors.maxFontSize || ""
+    $("t-error").textContent = ""
+  }
+
+  // Redraws the controls from the draft, leaving whatever field has focus alone
+  function renderThemeSheet() {
+    if (!sheet || sheet.kind !== "theme") return
+    const d = sheet.draft
+    const variants = !!(d.light || d.dark)
+    $("t-variants").checked = variants
+    $("t-variant-box").hidden = !variants
+    for (const button of $("t-variant").children) button.classList.toggle("on", button.dataset.variant === sheet.variant)
+
+    for (const [key] of COLOR_ROWS) {
+      const value = editedColor(key)
+      const hex = parseHex(value)
+      for (const swatch of $("te-" + key).previousSibling.querySelectorAll(".swatch")) swatch.classList.toggle("on", swatch.dataset.hex === hex)
+      const field = $("t-hex-" + key)
+      if (document.activeElement !== field) field.value = value || ""
+      if (hex) $("t-pick-" + key).value = "#" + hex.toLowerCase()
+    }
+
+    const badge = contrastBadge(resolveColors(sheet.valid, sheet.variant))
+    $("t-contrast").textContent = badge.text
+    $("t-contrast").className = "contrast " + (badge.ok ? "good" : "warn")
+
+    const family = findFontFamily(d.fontName)
+    for (const card of $("t-fonts").children) {
+      card.classList.toggle("on", !!family && family.id === card.dataset.family)
+      const css = toCss(fontSpec(Object.assign({}, sheet.valid, { fontName: card.dataset.family }), 20))
+      const sample = card.firstChild
+      sample.style.fontFamily = css.fontFamily
+      sample.style.fontWeight = css.fontWeight
+      sample.style.fontStyle = css.fontStyle
+    }
+    const fonts = fontOptions(sheet.valid)
+    const weights = $("t-weights")
+    weights.textContent = ""
+    for (const option of fonts.weights) {
+      const pill = el("button", "pill" + (option.on ? " on" : ""), option.label)
+      pill.disabled = !option.available
+      pill.setAttribute("aria-pressed", option.on ? "true" : "false")
+      pill.addEventListener("click", () => {
+        sheet.draft.fontWeight = option.id
+        commitTheme()
+      })
+      weights.append(pill)
+    }
+    $("t-italic").checked = fonts.italic.on
+    $("t-italic").disabled = !fonts.italic.available
+
+    $("t-size-label").textContent = sizeLabel(d.minFontSize, d.maxFontSize)
+    renderSheetPreview()
+  }
+
+  function renderSheetPreview() {
+    const t = normalizeTheme(sheet.valid).theme
+    const colors = resolveColors(t, sheet.variant)
+    const css = toCss(fontSpec(t, t.maxFontSize))
+    renderPoster($("t-preview"), scrubAt(), {
+      bg: "#" + colors.bgColor, text: "#" + colors.textColor,
+      font: css.fontFamily, weight: css.fontWeight, style: css.fontStyle,
+      minSize: t.minFontSize, maxSize: t.maxFontSize
+    })
+  }
+
+  function refreshThemeSheet() {
+    if (!findTheme(sheet.filename)) return closeSheet()
+    renderSheetPreview()
+  }
+
   // ---------- toast ----------
 
   let toastTimer = null
-  function showToast(text) {
+  function showToast(text, onUndo) {
     const toast = $("toast")
     toast.textContent = ""
     const undo = el("button", "link", "Deshacer")
     undo.addEventListener("click", () => {
       hideToast()
-      send({ type: "op", op: "undo" })
+      onUndo()
     })
     toast.append(el("span", "", text + " ·"), undo)
     toast.classList.add("show")
@@ -823,36 +1282,61 @@ function editorApp(initial, sizes) {
   }
 
   renderMain()
+  renderThemes()
   setInterval(() => {
     if (scrub.live) renderMain()
   }, 30000)
+  if (options && options.focus === "tema") setTimeout(() => $("tema").scrollIntoView({ block: "start" }), 50)
+}
+
+function colorVars(colors) {
+  return [
+    `  color-scheme: ${colors.scheme};`,
+    `  --bg: ${colors.bg};`,
+    `  --text: ${colors.text};`,
+    `  --text-rgb: ${colors.textRgb};`,
+    `  --accent: ${colors.accent};`,
+    `  --on-accent: ${colors.onAccent};`
+  ].join("\n")
 }
 
 /**
- * @param {Object} parts - { tokens: themeTokens(), shared: injected helper source, state: state JSON safe for <script> }
+ * The theme's CSS variables; adaptive themes switch to `dark` under
+ * prefers-color-scheme. The page rewrites them when the theme changes.
+ * @param {Object} tokens - from themeTokens()
  * @returns {string}
  */
-function render({ tokens, shared, state }) {
-  const sizes = JSON.stringify({ minSize: tokens.minSize, maxSize: tokens.maxSize })
+function themeCss(tokens) {
+  const root = `:root {
+${colorVars(tokens)}
+  --font: ${tokens.font};
+  --weight: ${tokens.weight};
+  --style: ${tokens.style};
+}
+`
+  if (!tokens.adaptive) return root
+  return root + `@media (prefers-color-scheme: dark) {
+  :root {
+${colorVars(tokens.dark)}
+  }
+}
+`
+}
+
+/**
+ * @param {Object} parts - { tokens: themeTokens(), shared: injected helper source,
+ *   state: state JSON safe for <script>, options: editorApp options JSON }
+ * @returns {string}
+ */
+function render({ tokens, shared, state, options }) {
   return `<!DOCTYPE html>
 <html lang="es">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>ZenTweak</title>
-<style>
-:root {
-  color-scheme: ${tokens.scheme};
-  --bg: ${tokens.bg};
-  --text: ${tokens.text};
-  --text-rgb: ${tokens.textRgb};
-  --accent: ${tokens.accent};
-  --font: ${tokens.font};
-  --weight: ${tokens.weight};
-  --style: ${tokens.style};
-}
-${CSS}
-</style>
+<style id="theme-vars">${themeCss(tokens)}</style>
+<style>${CSS}</style>
 </head>
 <body>
 <pre id="fatal" style="display:none;white-space:pre-wrap;color:#FF453A;font:13px ui-monospace,monospace;padding:12px;border:1px solid #FF453A;border-radius:12px"></pre>
@@ -866,9 +1350,12 @@ window.onerror = function (message, source, line, column, error) {
 </script>
 <script>
 ${shared}
+${colorVars.toString()}
+${themeCss.toString()}
 const ITEM_SHEET = ${JSON.stringify(ITEM_SHEET)}
 const ADD_SHEET = ${JSON.stringify(ADD_SHEET)}
-;(${editorApp.toString()})(${state}, ${sizes})
+const THEME_SHEET = ${JSON.stringify(THEME_SHEET)}
+;(${editorApp.toString()})(${state}, ${options || "{}"})
 </script>
 </body>
 </html>`

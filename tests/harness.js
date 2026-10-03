@@ -262,6 +262,13 @@ function createRuntime(opts = {}) {
     monospaceSystemFont: fontFactory("mono"),
     regularSystemFont: fontFactory("regular")
   })
+  // Scriptable's weighted factories: <weight>SystemFont, <weight>RoundedSystemFont
+  // and <weight>MonospacedSystemFont, named e.g. "heavy", "boldRounded", "lightMonospaced"
+  for (const weight of ["ultraLight", "thin", "light", "regular", "medium", "semibold", "bold", "heavy", "black"]) {
+    if (!Font[`${weight}SystemFont`]) Font[`${weight}SystemFont`] = fontFactory(weight)
+    Font[`${weight}RoundedSystemFont`] = fontFactory(`${weight}Rounded`)
+    Font[`${weight}MonospacedSystemFont`] = fontFactory(`${weight}Monospaced`)
+  }
   function Color(hex, alpha) { return { hex, alpha: alpha ?? 1 } }
   Color.dynamic = (light, dark) => ({ light, dark })
   Color.white = () => Color("#FFFFFF"); Color.black = () => Color("#000000"); Color.clear = () => Color("#000000", 0)

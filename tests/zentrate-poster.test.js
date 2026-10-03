@@ -281,3 +281,43 @@ test("big text in the first or last row is pulled inside the widget instead of b
     assert.ok(textRect.y + textRect.h <= 170, `${name} bottom inside`)
   }
 })
+
+// ---------- theme ----------
+
+const ADAPTIVE = {
+  bgColor: "000000", textColor: "FFFFFF", fontName: "Avenir Next", fontWeight: "bold", minFontSize: 10, maxFontSize: 20,
+  light: { bgColor: "FFFFFF", textColor: "222222" }
+}
+
+async function renderThemed(theme, dark) {
+  const files = { "zentrate_config.json": { items: [item("Mail", "left")], sortMethod: "manual" }, "zen_theme.json": theme }
+  const rt = createRuntime({ now: new Date(2026, 9, 2, 12, 0), files, scriptName: "ZenTrate", dark })
+  await rt.runScript("ZenTrate.js", { runsInWidget: true, config: { widgetFamily: "medium" } })
+  return rt
+}
+
+const textColorOp = rt => rt.widget.backgroundImage.ops.find(op => op.op === "setTextColor").color
+
+test("the poster bakes in the colors for the current appearance and pairs them with a static background", async () => {
+  const light = await renderThemed(ADAPTIVE, false)
+  assert.deepEqual(textColorOp(light), { hex: "#222222", alpha: 1 })
+  assert.deepEqual(light.widget.backgroundColor, { hex: "#FFFFFF", alpha: 1 })
+  const dark = await renderThemed(ADAPTIVE, true)
+  assert.deepEqual(textColorOp(dark), { hex: "#FFFFFF", alpha: 1 })
+  assert.deepEqual(dark.widget.backgroundColor, { hex: "#000000", alpha: 1 })
+})
+
+test("a forced appearance wins over the device's on the poster", async () => {
+  const rt = await renderThemed({ ...ADAPTIVE, appearance: "dark" }, false)
+  assert.deepEqual(textColorOp(rt), { hex: "#FFFFFF", alpha: 1 })
+})
+
+test("the poster draws with the theme's face for its weight", async () => {
+  const rt = await renderThemed(ADAPTIVE, true)
+  assert.equal(drawn(rt)[0].font.name, "AvenirNext-Bold")
+})
+
+test("string theme sizes still scale the poster by usage", async () => {
+  const rt = await renderThemed({ minFontSize: "12", maxFontSize: "24" }, true)
+  assert.equal(drawn(rt)[0].font.size, 12)
+})

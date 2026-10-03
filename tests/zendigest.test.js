@@ -143,3 +143,42 @@ test("no events, before noon: open day", async () => {
   const rt = await render(day(9))
   assert.deepEqual(texts(rt), ["Good morning", "Your day is wide open."])
 })
+
+// ---------- theme ----------
+
+const WEATHER = {
+  location: here,
+  Request: weatherRequest({
+    current: { temperature_2m: 18, weather_code: 0 },
+    daily: { temperature_2m_max: [22], temperature_2m_min: [12], uv_index_max: [1], weather_code: [1] }
+  })
+}
+
+function sizes(rt) {
+  return rt.leaves().map(l => l.font.size)
+}
+
+test("font sizes are numbers derived from string theme sizes", async () => {
+  const rt = await render(day(8), {
+    ...WEATHER,
+    reminders: [{ title: "Call", dueDate: day(17) }],
+    files: { "zen_theme.json": { minFontSize: "12", maxFontSize: "30" } }
+  })
+  const [greeting, weather, digest, reminders] = sizes(rt)
+  assert.deepEqual([greeting, weather, digest, reminders], [28, 16, 14, 12])
+  for (const s of sizes(rt)) assert.equal(typeof s, "number")
+})
+
+test("the weather line never outgrows the greeting, even on a narrow size range", async () => {
+  const rt = await render(day(8), { ...WEATHER, files: { "zen_theme.json": { minFontSize: 20, maxFontSize: 20 } } })
+  const [greeting, weather, digest] = sizes(rt)
+  assert.ok(weather <= greeting, `${weather} <= ${greeting}`)
+  assert.ok(digest <= weather, `${digest} <= ${weather}`)
+})
+
+test("the greeting is bold and the digest regular in a custom family", async () => {
+  const rt = await render(day(9), { files: { "zen_theme.json": { fontName: "Avenir Next", fontWeight: "regular" } } })
+  const [greeting, digest] = rt.leaves().map(l => l.font.name)
+  assert.equal(greeting, "AvenirNext-Bold")
+  assert.equal(digest, "AvenirNext-Regular")
+})

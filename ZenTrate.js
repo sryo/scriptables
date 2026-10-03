@@ -172,8 +172,12 @@ function createWidget() {
  */
 function createPosterWidget(layout, size) {
   const widget = Widget.createWidget({ padding: [0, 0, 0, 0], theme: themeConfig })
+  // The text is baked for the current appearance, so the background must not
+  // switch on its own until the next render redraws both
+  const colors = Theme.resolveForRender(themeConfig)
+  widget.backgroundColor = new Color("#" + colors.bgColor)
   widget.spacing = 0
-  widget.backgroundImage = drawPoster(layout, size)
+  widget.backgroundImage = drawPoster(layout, size, colors)
   addTapCells(widget, layout, size)
   return widget
 }
@@ -182,17 +186,17 @@ function createPosterWidget(layout, size) {
  * Draws biggest first, so smaller names land on top. Nothing is filled: any
  * fill shows as a box when iOS tints or clears the widget background
  */
-function drawPoster(layout, size) {
+function drawPoster(layout, size, colors) {
   const ctx = new DrawContext()
   ctx.size = new Size(size.width, size.height)
   ctx.respectScreenScale = true
   ctx.opaque = false
 
-  const textColor = Theme.getTextColor(themeConfig)
+  const textColor = new Color("#" + colors.textColor)
   const toRect = r => new Rect(r.x, r.y, r.w, r.h)
 
   for (const entry of layout.entries) {
-    ctx.setFont(Theme.getFont(entry.fontSize, { theme: themeConfig }))
+    ctx.setFont(Theme.toScriptableFont(Theme.fontSpec(themeConfig, entry.fontSize)))
     ctx.setTextColor(textColor)
     if (entry.align === 'center') ctx.setTextAlignedCenter()
     else if (entry.align === 'right') ctx.setTextAlignedRight()
@@ -209,7 +213,7 @@ function blankImage(width, height) {
   ctx.respectScreenScale = false
   // getImage() returns null until something is drawn; a clear fill counts
   // without showing up even when iOS tints the widget
-  ctx.setFillColor(new Color(themeConfig.bgColor, 0))
+  ctx.setFillColor(new Color("#000000", 0))
   ctx.fillRect(new Rect(0, 0, ctx.size.width, ctx.size.height))
   return ctx.getImage()
 }

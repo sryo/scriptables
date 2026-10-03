@@ -2,10 +2,16 @@
   "name": "Terminal",
   "author": "sryo",
   "bgColor": "000000",
-  "textColor": "b3ec91",
+  "textColor": "B3EC91",
+  "accentColor": "FFB000",
   "fontName": "Courier",
   "fontWeight": "bold",
   "fontItalic": false,
-  "minFontSize": 20,
-  "maxFontSize": 20
+  "minFontSize": 12,
+  "maxFontSize": 28,
+  "light": {
+    "bgColor": "F4F9F0",
+    "textColor": "1E5C1E",
+    "accentColor": "B36B00"
+  }
 }

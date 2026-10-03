@@ -3,9 +3,15 @@
   "author": "sryo",
   "bgColor": "F0E6EF",
   "textColor": "7D6B7D",
+  "accentColor": "B58DB6",
   "fontName": "Avenir Next",
   "fontWeight": "regular",
   "fontItalic": false,
   "minFontSize": 14,
-  "maxFontSize": 32
+  "maxFontSize": 32,
+  "dark": {
+    "bgColor": "2B2430",
+    "textColor": "E8DDE8",
+    "accentColor": "C9A6CA"
+  }
 }

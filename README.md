@@ -7,8 +7,8 @@ al life and enhance productivity.
 
 - **Customizable Launcher**: ZenTrate.js is a productivity launcher that you can tailor to your needs. It supports adding apps, shortcuts, and other actions, all presented in a minimalist, distraction-free widget.
 - **Minimalist Calendar**: ZenLendar.js provides a sleek, easy-to-read calendar widget that integrates seamlessly with ZenTrate.
-- **Theme Management**: ZenTheme.js allows you to create and apply custom themes, adjusting colors, fonts, and other visual settings.
-- **Menu Editor**: ZenTweak.js is our configuration editor: a fullscreen page with a live preview of the widget, drag-and-drop columns, schedules, and autosave, so you never edit JSON files directly.
+- **Theme Management**: themes live in ZenTweak's editor (section Tema): tap a theme to apply it, long-press to edit colors, light/dark variants, font and sizes.
+- **Menu Editor**: ZenTweak.js is our configuration editor: a fullscreen page with a live preview of the widget, a theme strip, drag-and-drop columns, schedules, and autosave, so you never edit JSON files directly.
 
 ## Getting Started
 
@@ -16,14 +16,14 @@ al life and enhance productivity.
 
 1. Download and install the Scriptable app from the App Store.
 2. Clone or download the ZenTrate repository from GitHub: [ZenTrate Repository](https://github.com/sryo/scriptables).
-3. Copy the `.js` files (ZenTrate.js, ZenLendar.js, ZenTheme.js) into Scriptable.
+3. Copy the `.js` files (ZenTrate.js, ZenLendar.js, ZenDigest.js, ZenTweak.js) and the `lib/` and `config/` folders into Scriptable.
 4. Optionally, copy the ZenThemes directory.
 
 ### 2. First Run
 
 - When you run ZenTrate for the first time, it will create a default configuration file (`zentrate_config.json`) in your iCloud Scriptable documents directory. This file contains example items (apps and shortcuts) that you can customize.
 - ZenLendar provides a minimalist calendar view for your home screen.
-- On the first run, ZenTheme will create a default theme (`noir.json`) and store it in the `ZenThemes` folder in your iCloud Scriptable documents directory. You can also create your own.
+- If the `ZenThemes` folder is empty, ZenTweak creates a default theme (`noir.json`) there. You can duplicate and edit it, or create your own.
 
 ## How to use
 
@@ -40,16 +40,16 @@ ZenLendar displays your calendar events in a clean, concise format. It integrate
 
 ## Creating and Editing Themes
 
-### ZenTheme.js
-ZenTheme lets you manage themes for ZenTrate and ZenLendar.
+Themes apply to ZenTrate, ZenLendar and ZenDigest. Manage them in ZenTweak's Tema section.
 
 | ![noir](https://github.com/user-attachments/assets/1cff7f61-64b7-403b-897e-dd5c295c7afb) | ![zen](https://github.com/user-attachments/assets/802e85e7-be47-4a6b-ace3-0f6ea2344876) | ![cartoon](https://github.com/user-attachments/assets/feb6bbc1-5ff4-4167-8061-4c3613139b3c) |
 | --- | ---- | ---- |
 | ![pastel](https://github.com/user-attachments/assets/520a928e-67d6-42fc-84be-4f43d0478d93) | ![terminal](https://github.com/user-attachments/assets/26a06a8a-502c-49b3-8d4c-4a1238518192) | ![elegant](https://github.com/user-attachments/assets/6a64c479-be47-41da-b418-79d48e8e6017) |
 
 
-- **Select an Existing Theme**: Choose from your saved themes to apply it to ZenTrate or ZenLendar.
-- **Create a New Theme**: Use the configuration UI to define a new theme with your desired settings.
+- **Apply a theme**: tap its chip; the editor re-themes immediately. Pick Automático, Oscuro or Claro for the active theme.
+- **Edit a theme**: long-press its chip (or tap Editar). Changes save as you make them; the contrast badge warns when text gets hard to read.
+- **Create a theme**: + Nuevo duplicates the active theme as «<Nombre> copia» and opens it for editing.
 
 ## Contributing
 Contributions are welcome! Whether it's adding new themes, improving existing scripts, or suggesting new features, feel free to submit a pull request or open an issue.

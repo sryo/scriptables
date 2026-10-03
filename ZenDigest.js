@@ -268,6 +268,16 @@ function nextChange(now, events, reminders, fallback) {
   return new Date(next)
 }
 
+// Each line steps down from the greeting and never outgrows the one above
+// it, even when the theme's size range is narrow
+function lineSizes(theme) {
+  const min = theme.minFontSize
+  const greeting = Math.max(theme.maxFontSize - 2, min)
+  const weather = Math.min(min + 4, greeting)
+  const digest = Math.min(min + 2, weather)
+  return { greeting, weather, digest, reminders: Math.min(min, digest) }
+}
+
 function addLine(stack, text, font, url) {
   const row = stack.addStack()
   if (url) row.url = url
@@ -317,19 +327,20 @@ async function createWidget() {
   const mainStack = widget.addStack()
   mainStack.layoutVertically()
 
-  addLine(mainStack, DateTime.getGreeting(), Theme.getBoldFont(themeConfig.maxFontSize - 2, themeConfig), userConfig.widgetUrl)
+  const sizes = lineSizes(themeConfig)
+  addLine(mainStack, DateTime.getGreeting(), Theme.getBoldFont(sizes.greeting, themeConfig), userConfig.widgetUrl)
   mainStack.addSpacer(6)
 
   if (weatherLine) {
-    addLine(mainStack, weatherLine, Theme.getMediumFont(themeConfig.minFontSize + 4, themeConfig), "weather://")
+    addLine(mainStack, weatherLine, Theme.getMediumFont(sizes.weather, themeConfig), "weather://")
     mainStack.addSpacer(4)
   }
 
-  addLine(mainStack, digestLine, Theme.getRegularFont(themeConfig.minFontSize + 2, themeConfig), userConfig.widgetUrl)
+  addLine(mainStack, digestLine, Theme.getRegularFont(sizes.digest, themeConfig), userConfig.widgetUrl)
 
   if (remindersLine) {
     mainStack.addSpacer(2)
-    addLine(mainStack, remindersLine, Theme.getRegularFont(themeConfig.minFontSize, themeConfig))
+    addLine(mainStack, remindersLine, Theme.getRegularFont(sizes.reminders, themeConfig))
   }
 
   return widget

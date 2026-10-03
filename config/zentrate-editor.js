@@ -22,7 +22,6 @@ const ZenTrateConfig = importModule("config/zentrate")
 const DateTime = importModule("lib/datetime")
 const Schemes = importModule("lib/schemes")
 const Theme = importModule("lib/theme")
-const Validate = importModule("lib/validate")
 const Page = importModule("config/zentrate-editor-page")
 
 // Bound under the names the page sees them by, so page helpers read the same
@@ -31,6 +30,7 @@ const { parseTime, toMinutes, toDay, isMinuteInWindow, isDayInRange, isScheduled
 const { columnItems, describeConstraints, usageFontSize, sortItems, posterLayout, fitRows, DAY_LETTERS,
   COLUMNS, POSTER_PADDING, LINE_HEIGHT } = ZenTrateConfig
 const { normalize, capitalize, search, shortcutItem, CATALOG } = Schemes
+const { normalizeTheme, hasVariants, resolveColors, contrastRatio, findFontFamily, fontSpec, toCss, FONT_WEIGHTS } = Theme
 
 // ============================================
 // PAGE HELPERS (injected into the WebView)
@@ -173,12 +173,130 @@ function createBridge(complete) {
   }
 }
 
+/**
+ * The contrast of a variant's text on its background, as the sheet shows it.
+ * @param {Object} colors - { bgColor, textColor }
+ * @returns {Object} { ratio, ok (≥ 4.5), text }
+ */
+function contrastBadge(colors) {
+  const ratio = contrastRatio(colors.bgColor, colors.textColor) || 1
+  const ok = ratio >= 4.5
+  const shown = ratio.toFixed(1).replace(/\.0$/, "").replace(".", ",")
+  return { ratio, ok, text: `Contraste ${shown}:1` + (ok ? "" : " · Cuesta leerlo") }
+}
+
+// Each pill covers a band of CSS weights; `nominal` is what it asks for
+const WEIGHT_PILLS = [
+  { label: "Fina", nominal: "light", band: [100, 200, 300] },
+  { label: "Normal", nominal: "regular", band: [400] },
+  { label: "Media", nominal: "medium", band: [500, 600] },
+  { label: "Negrita", nominal: "bold", band: [700] },
+  { label: "Black", nominal: "black", band: [800, 900] }
+]
+
+/**
+ * Which weight pills and italic switch the theme's font family can honor.
+ * A pill is available when the family has a face in its band, and `id` is
+ * the weight to save so fontSpec picks that face.
+ * @param {Object} theme
+ * @returns {Object} { weights: [{ id, label, available, on }], italic: { available, on } }
+ */
+function fontOptions(theme) {
+  const spec = fontSpec(theme, 20)
+  const family = findFontFamily(normalizeTheme(theme).theme.fontName)
+  const faces = family && family.faces
+  const italicFaces = faces ? faces.filter(f => f.italic) : []
+  const pool = !faces ? null : spec.italic && italicFaces.length ? italicFaces : faces.filter(f => !f.italic)
+  const weightOf = w => Object.keys(FONT_WEIGHTS).find(name => FONT_WEIGHTS[name] === w)
+
+  const weights = WEIGHT_PILLS.map(pill => {
+    let id = pill.nominal
+    let available = !!family
+    if (pool) {
+      const inBand = pool.filter(f => pill.band.includes(f.weight))
+      available = inBand.length > 0
+      if (available) {
+        const target = FONT_WEIGHTS[pill.nominal]
+        id = weightOf(inBand.reduce((a, b) => Math.abs(b.weight - target) < Math.abs(a.weight - target) ? b : a).weight)
+      }
+    } else if (family && family.kind === "system" && spec.italic) {
+      available = pill.nominal === "regular"
+    }
+    return { id, label: pill.label, available, on: !!family && pill.band.includes(spec.cssWeight) }
+  })
+  const italicAvailable = !!family && (faces ? italicFaces.length > 0 : family.kind === "system")
+  return { weights, italic: { available: italicAvailable, on: spec.italic } }
+}
+
+/**
+ * What a theme chip shows: its font, and its colors for `mode`. In "auto" a
+ * theme with variants splits into its light and dark halves.
+ * @param {Object} theme
+ * @param {string} mode - "auto" | "dark" | "light"
+ * @returns {Object} { bg, text, accent, font, weight, style, split: { light, dark } | null }
+ */
+function themeSwatch(theme, mode) {
+  const css = toCss(fontSpec(theme, 20))
+  const look = appearance => {
+    const c = resolveColors(theme, appearance)
+    return { bg: "#" + c.bgColor, text: "#" + c.textColor, accent: "#" + c.accentColor }
+  }
+  const base = look(mode === "light" ? "light" : "dark")
+  const split = mode !== "light" && mode !== "dark" && hasVariants(normalizeTheme(theme).theme)
+    ? { light: look("light"), dark: look("dark") }
+    : null
+  return { ...base, font: css.fontFamily, weight: css.fontWeight, style: css.fontStyle, split }
+}
+
+function sizeLabel(minSize, maxSize) {
+  return Number(minSize) === Number(maxSize) ? `Tamaño fijo: ${minSize}` : `Chico ${minSize} ↔ Grande ${maxSize}`
+}
+
+/**
+ * Turns separate light/dark colors on or off. On, both blocks are written
+ * out; a variant the theme didn't have starts with text and background
+ * swapped so the difference is visible. Off, the colors of `keep` stay.
+ * @returns {Object} a new theme
+ */
+function setVariants(theme, on, keep) {
+  const next = Object.assign({}, theme)
+  if (on) {
+    const dark = resolveColors(theme, "dark")
+    const light = resolveColors(theme, "light")
+    const same = ["bgColor", "textColor", "accentColor"].every(key => light[key] === dark[key])
+    next.dark = dark
+    next.light = same ? { bgColor: dark.textColor, textColor: dark.bgColor, accentColor: dark.accentColor } : light
+    return next
+  }
+  Object.assign(next, resolveColors(theme, keep === "light" ? "light" : "dark"))
+  delete next.light
+  delete next.dark
+  return next
+}
+
+/**
+ * Sets one color as typed: in the variant's block when the theme has
+ * variants, in the flat colors otherwise.
+ * @returns {Object} a new theme
+ */
+function setThemeColor(theme, variant, key, value) {
+  const next = Object.assign({}, theme)
+  if (theme.light || theme.dark) {
+    const block = variant === "light" ? "light" : "dark"
+    next[block] = Object.assign({}, theme[block], { [key]: value })
+  } else {
+    next[key] = value
+  }
+  return next
+}
+
 const PAGE_FUNCTIONS = [
   parseTime, toMinutes, toDay, isMinuteInWindow, isDayInRange, isScheduledAt,
   columnItems, describeConstraints, usageFontSize, sortItems, posterLayout, fitRows,
   normalize, capitalize, search, shortcutItem,
   pillsToRange, rangeToPills, visibleAt, isOvernight, previewPoster,
-  scrubDate, scrubLabel, dropPosition, moveStep, createBridge
+  scrubDate, scrubLabel, dropPosition, moveStep, createBridge,
+  contrastBadge, fontOptions, themeSwatch, sizeLabel, setVariants, setThemeColor
 ]
 
 // ============================================
@@ -187,6 +305,7 @@ const PAGE_FUNCTIONS = [
 
 const MESSAGE_TYPES = ["op", "search-claude", "set-key", "test", "idle"]
 const OPS = ["add", "update", "delete", "move", "constraints", "sort", "train", "stopTrain", "undo"]
+const THEME_OPS = ["theme.apply", "theme.appearance", "theme.update", "theme.duplicate", "theme.delete", "theme.undoDelete"]
 // Changes to items count as new habits worth learning
 const EDIT_OPS = ["add", "update", "delete", "move", "constraints"]
 
@@ -209,7 +328,7 @@ function parseMessage(raw) {
   }
   if (!msg || typeof msg !== "object" || Array.isArray(msg)) return fail("Mensaje no válido")
   if (!MESSAGE_TYPES.includes(msg.type)) return fail(`Mensaje desconocido «${msg.type}»`)
-  if (msg.type === "op" && !OPS.includes(msg.op)) return fail(`Operación desconocida «${msg.op}»`)
+  if (msg.type === "op" && !OPS.includes(msg.op) && !THEME_OPS.includes(msg.op)) return fail(`Operación desconocida «${msg.op}»`)
   return { ok: true, msg }
 }
 
@@ -269,63 +388,163 @@ function applyOp(state, msg, now) {
   return { ok: true, state: next }
 }
 
+function isThemeOp(msg) {
+  return THEME_OPS.includes(msg && msg.op)
+}
+
+/** A theme as a ZenThemes file stores it: normalized, no bookkeeping. */
+function storedTheme(theme) {
+  const { source: _s, ...data } = normalizeTheme(theme).theme
+  return data
+}
+
+/**
+ * «Zen copia», or «Zen copia 2»… when that name is taken (case ignored).
+ * @param {string} name
+ * @param {string[]} names - names already in use
+ */
+function copyName(name, names) {
+  const taken = new Set(names.map(n => String(n).trim().toLowerCase()))
+  const base = `${name} copia`
+  let candidate = base
+  for (let n = 2; taken.has(candidate.toLowerCase()); n++) candidate = `${base} ${n}`
+  return candidate
+}
+
+/**
+ * Decides what one theme op writes, without touching files: ZenTweak carries
+ * out the returned effect with lib/theme. A delete can be undone until the
+ * next op.
+ * @param {Object} state - { themes (from loadAllThemes), active (loadTheme), undo }
+ * @param {Object} msg - A parsed "op" message
+ * @returns {Object} { ok, effect: { kind: "apply"|"update"|"create"|"remove"|"saveActive", filename?, theme? },
+ *   undo, deleted? } or { ok: false, error, field?, errors? }
+ */
+function applyThemeOp(state, msg) {
+  const themes = state.themes || []
+  const find = filename => themes.find(t => t.filename === filename)
+  const GONE = "Ese tema ya no existe."
+
+  switch (msg.op) {
+    case "theme.apply": {
+      if (!find(msg.filename)) return fail(GONE)
+      return { ok: true, effect: { kind: "apply", filename: msg.filename }, undo: null }
+    }
+    case "theme.appearance": {
+      if (!Theme.APPEARANCES.includes(msg.appearance)) return fail("Elegí automático, oscuro o claro", "appearance")
+      const file = state.active && find(state.active.source)
+      if (file) return { ok: true, effect: { kind: "update", filename: file.filename, theme: storedTheme({ ...file, appearance: msg.appearance }) }, undo: null }
+      return { ok: true, effect: { kind: "saveActive", theme: storedTheme({ ...state.active, appearance: msg.appearance }) }, undo: null }
+    }
+    case "theme.update": {
+      if (!find(msg.filename)) return fail(GONE)
+      const draft = msg.theme && typeof msg.theme === "object" ? msg.theme : {}
+      const check = Theme.validateTheme(draft)
+      if (!check.ok) {
+        const field = Object.keys(check.errors)[0]
+        return { ok: false, error: check.errors[field], field, errors: check.errors }
+      }
+      return { ok: true, effect: { kind: "update", filename: msg.filename, theme: storedTheme(draft) }, undo: null }
+    }
+    case "theme.duplicate": {
+      const from = msg.filename ? find(msg.filename) : state.active
+      if (!from) return fail(GONE)
+      const name = copyName(normalizeTheme(from).theme.name, themes.map(t => t.name))
+      return { ok: true, effect: { kind: "create", theme: storedTheme({ ...from, name }) }, undo: null }
+    }
+    case "theme.delete": {
+      const doomed = find(msg.filename)
+      if (!doomed) return fail(GONE)
+      if (doomed.active || (state.active && state.active.source === doomed.filename)) {
+        return fail("No podés borrar el tema activo. Elegí otro primero.")
+      }
+      return {
+        ok: true,
+        effect: { kind: "remove", filename: doomed.filename },
+        undo: { filename: doomed.filename, theme: storedTheme(doomed) },
+        deleted: doomed.name
+      }
+    }
+    case "theme.undoDelete": {
+      if (!state.undo) return fail("Nada para deshacer")
+      const { filename, theme } = state.undo
+      // Something saved under that filename since: restore beside it instead
+      const effect = find(filename) ? { kind: "create", theme } : { kind: "update", filename, theme }
+      return { ok: true, effect, undo: null }
+    }
+  }
+  return fail(`Operación desconocida «${msg.op}»`)
+}
+
 /**
  * What the page needs to render.
- * @returns {Object} { config, stats, training: { active, text } }
+ * @param {Object} [themeInfo] - { themes (from loadAllThemes), active (loadTheme) }
+ * @returns {Object} { config, stats, training: { active, text }, themes: [{ filename, name, active, theme, swatch }],
+ *   activeTheme, tokens }
  */
-function buildState(config, stats, now) {
+function buildState(config, stats, now, themeInfo = {}) {
+  const active = normalizeTheme(themeInfo.active || {}).theme
   return {
     config,
     stats,
     training: {
       active: ZenTrateConfig.isTraining(config, now),
       text: ZenTrateConfig.describeTraining(config, now)
-    }
+    },
+    themes: (themeInfo.themes || []).map(t => ({
+      filename: t.filename,
+      name: t.name,
+      active: !!t.active,
+      theme: storedTheme(t),
+      swatch: themeSwatch(t, active.appearance)
+    })),
+    activeTheme: active,
+    tokens: themeTokens(active)
   }
-}
-
-const SYSTEM_FONT = "-apple-system, system-ui, sans-serif"
-const FONT_WEIGHTS = {
-  ultraLight: 200, thin: 100, light: 300, regular: 400, medium: 500,
-  semibold: 600, bold: 700, heavy: 800, black: 900
-}
-
-function cssFont(fontName) {
-  const name = String(fontName || "system")
-  switch (name.toLowerCase()) {
-    case "system": return SYSTEM_FONT
-    case "serif": return `ui-serif, Georgia, serif`
-    case "mono":
-    case "monospaced": return `ui-monospace, Menlo, monospace`
-    case "rounded": return `ui-rounded, ${SYSTEM_FONT}`
-  }
-  return `"${name.replace(/["\\<>;{}]/g, "")}", ${SYSTEM_FONT}`
 }
 
 /**
- * The active theme as CSS values.
+ * One appearance's colors as CSS values; `scheme` and `onAccent` pick
+ * whichever of white or black contrasts more.
+ */
+function colorTokens(colors) {
+  const rgb = h => [0, 2, 4].map(i => parseInt(h.slice(i, i + 2), 16))
+  const darker = (hex) => Theme.contrastRatio(hex, "FFFFFF") >= Theme.contrastRatio(hex, "000000")
+  return {
+    bg: "#" + colors.bgColor,
+    text: "#" + colors.textColor,
+    textRgb: rgb(colors.textColor).join(", "),
+    accent: "#" + colors.accentColor,
+    onAccent: darker(colors.accentColor) ? "#FFFFFF" : "#000000",
+    scheme: darker(colors.bgColor) ? "dark" : "light"
+  }
+}
+
+/**
+ * The active theme as CSS values. The top-level colors are the ones to show
+ * by default; when `adaptive` (appearance auto with variants) the page swaps
+ * to `dark` under prefers-color-scheme.
  * @param {Object} theme
- * @returns {Object} { bg, text, textRgb, accent, scheme, font, weight, style, minSize, maxSize }
+ * @returns {Object} { bg, text, textRgb, accent, onAccent, scheme, light, dark, adaptive,
+ *   font, weight, style, minSize, maxSize }
  */
 function themeTokens(theme) {
-  const t = { ...Theme.DEFAULT_THEME, ...(theme || {}) }
-  const hex = (value, fallback) => "#" + (Validate.validateHexColor(value) || fallback)
-  const bg = hex(t.bgColor, Theme.DEFAULT_THEME.bgColor)
-  const text = hex(t.textColor, Theme.DEFAULT_THEME.textColor)
-  const rgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16))
-  const [r, g, b] = rgb(bg)
-  const isSystem = String(t.fontName || "system").toLowerCase() === "system"
+  const t = Theme.normalizeTheme(theme).theme
+  const light = colorTokens(Theme.resolveColors(t, "light"))
+  const dark = colorTokens(Theme.resolveColors(t, "dark"))
+  const adaptive = t.appearance === "auto" && Theme.hasVariants(t)
+  const base = adaptive || t.appearance === "light" ? light : dark
+  const css = Theme.toCss(Theme.fontSpec(t, t.maxFontSize))
   return {
-    bg,
-    text,
-    textRgb: rgb(text).join(", "),
-    accent: hex(t.accentColor, Theme.DEFAULT_THEME.accentColor),
-    scheme: (0.299 * r + 0.587 * g + 0.114 * b) / 255 < 0.5 ? "dark" : "light",
-    font: cssFont(t.fontName),
-    weight: FONT_WEIGHTS[Validate.validateFontWeight(t.fontWeight)],
-    style: t.fontItalic && isSystem ? "italic" : "normal",
-    minSize: Number(t.minFontSize) || Theme.DEFAULT_THEME.minFontSize,
-    maxSize: Number(t.maxFontSize) || Theme.DEFAULT_THEME.maxFontSize
+    ...base,
+    light,
+    dark,
+    adaptive,
+    font: css.fontFamily,
+    weight: css.fontWeight,
+    style: css.fontStyle,
+    minSize: t.minFontSize,
+    maxSize: t.maxFontSize
   }
 }
 
@@ -345,17 +564,20 @@ function pageScript() {
     `const LINE_HEIGHT = ${scriptJSON(LINE_HEIGHT)}`,
     `const PREVIEW_SIZE = ${scriptJSON(PREVIEW_SIZE)}`,
     `const CATALOG = ${scriptJSON(CATALOG)}`,
+    `const WEIGHT_PILLS = ${scriptJSON(WEIGHT_PILLS)}`,
+    Theme.modelSource(),
     ...PAGE_FUNCTIONS.map(fn => fn.toString())
   ].join("\n")
 }
 
 /**
- * @param {Object} options - { theme, state }
+ * @param {Object} options - { theme, state, focus? ("tema" opens scrolled to that section) }
  * @returns {string} The whole editor page
  */
-function buildHTML({ theme, state }) {
+function buildHTML({ theme, state, focus }) {
   const tokens = themeTokens(theme)
-  return Page.render({ tokens, shared: pageScript(), state: scriptJSON(state) })
+  const options = scriptJSON({ focus: focus === "tema" ? "tema" : null })
+  return Page.render({ tokens, shared: pageScript(), state: scriptJSON(state), options })
 }
 
 module.exports = {
@@ -369,8 +591,17 @@ module.exports = {
   dropPosition,
   moveStep,
   createBridge,
+  contrastBadge,
+  fontOptions,
+  themeSwatch,
+  sizeLabel,
+  setVariants,
+  setThemeColor,
   parseMessage,
+  isThemeOp,
   applyOp,
+  copyName,
+  applyThemeOp,
   buildState,
   themeTokens,
   pageScript,

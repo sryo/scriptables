@@ -56,7 +56,8 @@ test("the page uses the active theme's colors and carries the current items", as
   assert.match(html, /--bg: #1A2B3C/)
   assert.match(html, /--text: #F0F0F0/)
   assert.match(html, /--accent: #FF9500/)
-  assert.match(html, /"Menlo-Regular"/)
+  // Menlo-Regular names the family; the default bold weight picks its bold face
+  assert.match(html, /"Menlo-Bold"/)
   assert.ok(html.includes('"name":"A"'))
   assert.ok(html.includes("function pillsToRange("))
 })
@@ -347,4 +348,120 @@ test("Siri refuses a duplicate name", async () => {
   assert.equal(saved(rt).items.length, 5)
   assert.equal(saved(rt).training, undefined)
   assert.match(rt.shortcutOutput, /already/)
+})
+
+// ---------- themes ----------
+
+const ACTIVE = "/docs/zen_theme.json"
+const NOIR_T = { name: "Noir", bgColor: "000000", textColor: "FFFFFF", accentColor: "0A84FF", fontName: "system", fontWeight: "bold", minFontSize: 10, maxFontSize: 40 }
+const ZEN_T = { name: "Zen", bgColor: "FDF5E6", textColor: "333333", accentColor: "B07D48", fontName: "Georgia", fontWeight: "regular", minFontSize: 12, maxFontSize: 30 }
+const THEME_FILES = {
+  "ZenThemes/noir.json": NOIR_T,
+  "ZenThemes/zen.json": ZEN_T,
+  "zen_theme.json": { ...NOIR_T, source: "noir.json" }
+}
+const file = (rt, p) => JSON.parse(rt.files.get(p))
+const themeFile = (rt, name) => file(rt, `/docs/ZenThemes/${name}`)
+
+test("the page state lists the themes and marks the active one", async () => {
+  const rt = await edit([], { files: THEME_FILES })
+  const html = view(rt).html
+  assert.ok(html.includes('"filename":"zen.json"'))
+  assert.ok(html.includes('id="tema"'))
+})
+
+test("applying a theme makes it active for every widget and re-themes the page", async () => {
+  const rt = await edit([op("theme.apply", { id: 1, filename: "zen.json" })], { files: THEME_FILES })
+  assert.equal(file(rt, ACTIVE).source, "zen.json")
+  assert.equal(file(rt, ACTIVE).bgColor, "FDF5E6")
+  assert.equal(last(rt).type, "state")
+  assert.equal(last(rt).state.tokens.bg, "#FDF5E6")
+  assert.deepEqual(last(rt).state.themes.filter(t => t.active).map(t => t.filename), ["zen.json"])
+})
+
+test("changing the appearance rewrites the active theme's file and copy", async () => {
+  const rt = await edit([op("theme.appearance", { appearance: "light" })], { files: THEME_FILES })
+  assert.equal(themeFile(rt, "noir.json").appearance, "light")
+  assert.equal(file(rt, ACTIVE).appearance, "light")
+  assert.equal(file(rt, ACTIVE).source, "noir.json")
+})
+
+test("a valid theme edit autosaves its file, and the active copy when it's the active theme", async () => {
+  const rt = await edit([
+    op("theme.update", { filename: "zen.json", theme: { ...ZEN_T, accentColor: "ff2d55" } }),
+    op("theme.update", { filename: "noir.json", theme: { ...NOIR_T, name: "Noche", maxFontSize: 50 } })
+  ], { files: THEME_FILES })
+  assert.equal(themeFile(rt, "zen.json").accentColor, "FF2D55")
+  assert.equal(themeFile(rt, "noir.json").name, "Noche")
+  assert.equal(file(rt, ACTIVE).name, "Noche")
+  assert.equal(file(rt, ACTIVE).maxFontSize, 50)
+  assert.equal(last(rt).state.tokens.maxSize, 50)
+})
+
+test("an invalid theme edit replies with field errors and saves nothing", async () => {
+  const rt = await edit([op("theme.update", { id: 9, filename: "zen.json", theme: { ...ZEN_T, bgColor: "zz", minFontSize: 99 } })],
+    { files: THEME_FILES })
+  assert.equal(last(rt).type, "error")
+  assert.equal(last(rt).id, 9)
+  assert.deepEqual(Object.keys(last(rt).errors).sort(), ["bgColor", "minFontSize"])
+  assert.deepEqual(themeFile(rt, "zen.json"), ZEN_T)
+  assert.equal(file(rt, ACTIVE).source, "noir.json")
+})
+
+test("duplicating saves «<Nombre> copia» under a new file and tells the page which", async () => {
+  const rt = await edit([op("theme.duplicate", { filename: "zen.json" })], { files: THEME_FILES })
+  assert.equal(last(rt).created, "zen-copia.json")
+  assert.equal(themeFile(rt, "zen-copia.json").name, "Zen copia")
+  assert.equal(file(rt, ACTIVE).source, "noir.json")
+  assert.ok(last(rt).state.themes.some(t => t.filename === "zen-copia.json"))
+})
+
+test("the active theme can't be deleted; another one can, and undo brings its file back", async () => {
+  const refused = await edit([op("theme.delete", { filename: "noir.json" })], { files: THEME_FILES })
+  assert.equal(last(refused).type, "error")
+  assert.match(last(refused).error, /activo/)
+  assert.ok(refused.files.has("/docs/ZenThemes/noir.json"))
+
+  const deleted = await edit([op("theme.delete", { filename: "zen.json" })], { files: THEME_FILES })
+  assert.equal(deleted.files.has("/docs/ZenThemes/zen.json"), false)
+  assert.equal(last(deleted).deleted, "Zen")
+
+  const undone = await edit([op("theme.delete", { filename: "zen.json" }), op("theme.undoDelete")], { files: THEME_FILES })
+  assert.deepEqual(themeFile(undone, "zen.json"), { ...ZEN_T, author: "", fontItalic: false, appearance: "auto" })
+  assert.equal(file(undone, ACTIVE).source, "noir.json")
+})
+
+test("an item edit between a theme delete and its undo ends the undo", async () => {
+  const rt = await edit([op("theme.delete", { filename: "zen.json" }), op("sort", { method: "usage" }), op("theme.undoDelete")],
+    { files: THEME_FILES })
+  assert.equal(rt.files.has("/docs/ZenThemes/zen.json"), false)
+  assert.equal(last(rt).type, "error")
+})
+
+test("a scripted theme session ends with the chosen theme active", async () => {
+  const rt = await edit([
+    op("theme.duplicate", { filename: "noir.json" }),
+    op("theme.update", { filename: "noir-copia.json", theme: { ...NOIR_T, name: "Noir copia", bgColor: "101820", light: { bgColor: "F2F2F7", textColor: "101820" } } }),
+    op("theme.apply", { filename: "zen.json" }),
+    op("theme.apply", { filename: "noir-copia.json" }),
+    op("theme.appearance", { appearance: "auto" }),
+    op("theme.delete", { filename: "zen.json" })
+  ], { files: THEME_FILES })
+  assert.ok(replies(rt).every(r => r.type !== "error"), JSON.stringify(replies(rt).filter(r => r.type === "error")))
+  const active = file(rt, ACTIVE)
+  assert.equal(active.source, "noir-copia.json")
+  assert.equal(active.bgColor, "101820")
+  assert.deepEqual(active.light, { bgColor: "F2F2F7", textColor: "101820" })
+  assert.equal(rt.files.has("/docs/ZenThemes/zen.json"), false)
+  assert.equal(last(rt).state.tokens.adaptive, true)
+})
+
+test("opened with focus=tema, the page scrolls to the Tema section", async () => {
+  const rt = await edit([], { args: { queryParameters: { focus: "tema" } } })
+  assert.match(view(rt).html, /\{"focus":"tema"\}\)/)
+})
+
+test("with no theme files the editor ships Noir so the strip is never empty", async () => {
+  const rt = await edit([])
+  assert.ok(rt.files.has("/docs/ZenThemes/noir.json"))
 })

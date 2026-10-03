@@ -3,6 +3,7 @@
   "author": "sryo",
   "bgColor": "FF00FF",
   "textColor": "FFFFFF",
+  "accentColor": "FFE600",
   "fontName": "GillSans-SemiBold",
   "fontWeight": "semibold",
   "fontItalic": false,

@@ -295,7 +295,8 @@ test("themeTokens turns the active theme into CSS values", () => {
   assert.equal(t.textRgb, "255, 238, 221")
   assert.equal(t.accent, "#0A84FF")
   assert.match(t.font, /^"DINAlternate-Bold", /)
-  assert.equal(t.weight, 600)
+  // DIN Alternate only has a bold face: the CSS shows that face, not a synthetic semibold
+  assert.equal(t.weight, 700)
   assert.deepEqual([t.minSize, t.maxSize], [12, 30])
   assert.match(E.themeTokens({ fontName: "system" }).font, /-apple-system/)
 })
@@ -336,4 +337,281 @@ test("the page app script parses", () => {
   const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m => m[1])
   assert.ok(scripts.length > 0)
   for (const src of scripts) assert.doesNotThrow(() => new vm.Script(src))
+})
+
+test("themeTokens emits light and dark values and the HTML switches with prefers-color-scheme for an adaptive theme", () => {
+  const theme = { bgColor: "000000", textColor: "FFFFFF", accentColor: "0A84FF", light: { bgColor: "FFFFFF", textColor: "111111" } }
+  const t = E.themeTokens(theme)
+  assert.equal(t.adaptive, true)
+  assert.equal(t.light.bg, "#FFFFFF")
+  assert.equal(t.dark.bg, "#000000")
+  assert.equal(t.light.scheme, "light")
+  assert.equal(t.dark.scheme, "dark")
+  const html = E.buildHTML({ theme, state: E.buildState(config([]), {}, NOW) })
+  assert.match(html, /@media \(prefers-color-scheme: dark\)\s*\{\s*:root\s*\{[^}]*--bg: #000000/)
+  assert.match(html, /--bg: #FFFFFF/)
+})
+
+test("a forced appearance or a flat theme renders a single color set", () => {
+  const theme = { bgColor: "000000", textColor: "FFFFFF", light: { bgColor: "FFFFFF", textColor: "111111" }, appearance: "light" }
+  const t = E.themeTokens(theme)
+  assert.equal(t.adaptive, false)
+  assert.equal(t.bg, "#FFFFFF")
+  const html = E.buildHTML({ theme, state: E.buildState(config([]), {}, NOW) })
+  const vars = html.match(/<style id="theme-vars">([\s\S]*?)<\/style>/)[1]
+  assert.ok(!vars.includes("prefers-color-scheme"))
+  assert.equal(E.themeTokens({ bgColor: "FDF5E6" }).adaptive, false)
+})
+
+test("themeTokens picks readable text on the accent by contrast", () => {
+  assert.equal(E.themeTokens({ accentColor: "FFE600" }).onAccent, "#000000")
+  assert.equal(E.themeTokens({ accentColor: "0043CE" }).onAccent, "#FFFFFF")
+})
+
+test("themeTokens takes the font from fontSpec, so CSS shows the face the widget draws", () => {
+  const t = E.themeTokens({ fontName: "Avenir Next", fontWeight: "semibold", fontItalic: true })
+  assert.match(t.font, /^"AvenirNext-DemiBoldItalic"/)
+  assert.equal(t.weight, 600)
+  assert.equal(t.style, "italic")
+  assert.deepEqual(E.themeTokens({ minFontSize: "30", maxFontSize: "12" }).minSize, 12)
+})
+
+// ---------- themes ----------
+
+const T = rt.require("lib/theme")
+const stored = (filename, raw, active = false) => ({ ...T.normalizeTheme(raw).theme, filename, active })
+const NOIR = { name: "Noir", bgColor: "000000", textColor: "FFFFFF", accentColor: "0A84FF", light: { bgColor: "FFFFFF", textColor: "000000" } }
+const ZEN = { name: "Zen", bgColor: "FDF5E6", textColor: "333333", accentColor: "B07D48", fontName: "Georgia" }
+const themeState = (undo = null) => ({
+  themes: [stored("noir.json", NOIR, true), stored("zen.json", ZEN)],
+  active: { ...T.normalizeTheme(NOIR).theme, source: "noir.json" },
+  undo
+})
+const themeOp = (s, msg) => E.applyThemeOp(s, { type: "op", ...msg })
+
+test("parseMessage accepts every theme op", () => {
+  for (const name of ["theme.apply", "theme.appearance", "theme.update", "theme.duplicate", "theme.delete", "theme.undoDelete"]) {
+    assert.equal(E.parseMessage({ type: "op", op: name }).ok, true, name)
+  }
+  assert.equal(E.parseMessage({ type: "op", op: "theme.wipe" }).ok, false)
+})
+
+test("theme.apply activates a known theme file and refuses an unknown one", () => {
+  assert.deepEqual(themeOp(themeState(), { op: "theme.apply", filename: "zen.json" }),
+    { ok: true, effect: { kind: "apply", filename: "zen.json" }, undo: null })
+  const missing = themeOp(themeState(), { op: "theme.apply", filename: "gone.json" })
+  assert.equal(missing.ok, false)
+  assert.match(missing.error, /ya no existe/)
+})
+
+test("theme.appearance rewrites the active theme's file with the new appearance", () => {
+  const r = themeOp(themeState(), { op: "theme.appearance", appearance: "light" })
+  assert.equal(r.ok, true)
+  assert.equal(r.effect.kind, "update")
+  assert.equal(r.effect.filename, "noir.json")
+  assert.equal(r.effect.theme.appearance, "light")
+  assert.deepEqual(r.effect.theme.light, NOIR.light)
+  assert.ok(!("filename" in r.effect.theme) && !("active" in r.effect.theme) && !("source" in r.effect.theme))
+  assert.equal(themeOp(themeState(), { op: "theme.appearance", appearance: "sepia" }).ok, false)
+})
+
+test("theme.appearance without an active file saves the active copy only", () => {
+  const s = { themes: [], active: T.normalizeTheme(ZEN).theme, undo: null }
+  const r = themeOp(s, { op: "theme.appearance", appearance: "dark" })
+  assert.equal(r.effect.kind, "saveActive")
+  assert.equal(r.effect.theme.appearance, "dark")
+})
+
+test("theme.update saves a valid draft normalized under the same file", () => {
+  const draft = { ...ZEN, name: " Zen claro ", bgColor: "#ffffff", minFontSize: 12, maxFontSize: 30 }
+  const r = themeOp(themeState(), { op: "theme.update", filename: "zen.json", theme: draft })
+  assert.equal(r.ok, true)
+  assert.equal(r.effect.kind, "update")
+  assert.equal(r.effect.filename, "zen.json")
+  assert.equal(r.effect.theme.name, "Zen claro")
+  assert.equal(r.effect.theme.bgColor, "FFFFFF")
+})
+
+test("theme.update rejects an invalid draft with every field error and saves nothing", () => {
+  const draft = { ...ZEN, name: "", light: { textColor: "nope" }, minFontSize: 40, maxFontSize: 20 }
+  const r = themeOp(themeState(), { op: "theme.update", filename: "zen.json", theme: draft })
+  assert.equal(r.ok, false)
+  assert.equal(r.effect, undefined)
+  assert.deepEqual(Object.keys(r.errors).sort(), ["light.textColor", "maxFontSize", "name"])
+  assert.equal(r.field, "name")
+  assert.equal(r.error, r.errors.name)
+  assert.equal(themeOp(themeState(), { op: "theme.update", filename: "gone.json", theme: ZEN }).ok, false)
+})
+
+test("theme.duplicate copies a theme as «<Nombre> copia», numbering repeats", () => {
+  const r = themeOp(themeState(), { op: "theme.duplicate", filename: "zen.json" })
+  assert.equal(r.effect.kind, "create")
+  assert.equal(r.effect.theme.name, "Zen copia")
+  assert.equal(r.effect.theme.fontName, "Georgia")
+  const s = themeState()
+  s.themes.push(stored("zen-copia.json", { ...ZEN, name: "Zen copia" }))
+  assert.equal(themeOp(s, { op: "theme.duplicate", filename: "zen.json" }).effect.theme.name, "Zen copia 2")
+  assert.equal(E.copyName("Zen", ["Zen", "Zen copia", "zen COPIA 2"]), "Zen copia 3")
+})
+
+test("theme.duplicate without a filename copies the active theme", () => {
+  const r = themeOp(themeState(), { op: "theme.duplicate" })
+  assert.equal(r.effect.theme.name, "Noir copia")
+  assert.deepEqual(r.effect.theme.light, NOIR.light)
+})
+
+test("theme.delete refuses the active theme", () => {
+  const r = themeOp(themeState(), { op: "theme.delete", filename: "noir.json" })
+  assert.equal(r.ok, false)
+  assert.match(r.error, /activo/)
+})
+
+test("theme.delete removes another theme and theme.undoDelete restores it under its filename", () => {
+  const del = themeOp(themeState(), { op: "theme.delete", filename: "zen.json" })
+  assert.deepEqual(del.effect, { kind: "remove", filename: "zen.json" })
+  assert.equal(del.deleted, "Zen")
+  assert.equal(del.undo.filename, "zen.json")
+  const s = themeState(del.undo)
+  s.themes = s.themes.filter(t => t.filename !== "zen.json")
+  const back = themeOp(s, { op: "theme.undoDelete" })
+  assert.equal(back.ok, true)
+  assert.equal(back.effect.kind, "update")
+  assert.equal(back.effect.filename, "zen.json")
+  assert.equal(back.effect.theme.name, "Zen")
+  assert.equal(back.undo, null)
+  assert.equal(themeOp(themeState(), { op: "theme.undoDelete" }).ok, false)
+})
+
+test("undoing a delete never overwrites a theme saved under the same filename since", () => {
+  const del = themeOp(themeState(), { op: "theme.delete", filename: "zen.json" })
+  const back = themeOp(themeState(del.undo), { op: "theme.undoDelete" })
+  assert.equal(back.effect.kind, "create")
+  assert.equal(back.effect.theme.name, "Zen")
+})
+
+test("buildState lists themes with swatches, the active theme and its page tokens", () => {
+  const s = themeState()
+  const out = E.buildState(config(), {}, NOW, { themes: s.themes, active: s.active })
+  assert.deepEqual(out.themes.map(t => [t.filename, t.name, t.active]), [["noir.json", "Noir", true], ["zen.json", "Zen", false]])
+  assert.ok(!("filename" in out.themes[0].theme))
+  // Auto appearance: a theme with variants splits its swatch, a flat one doesn't
+  assert.deepEqual(out.themes[0].swatch.split.light.bg, "#FFFFFF")
+  assert.equal(out.themes[1].swatch.split, null)
+  assert.equal(out.themes[1].swatch.bg, "#FDF5E6")
+  assert.equal(out.activeTheme.source, "noir.json")
+  assert.deepEqual(out.tokens, E.themeTokens(s.active))
+  const plain = E.buildState(config(), {}, NOW)
+  assert.deepEqual(plain.themes, [])
+})
+
+test("in a forced appearance every swatch shows that variant", () => {
+  const s = themeState()
+  s.active = { ...s.active, appearance: "light" }
+  const out = E.buildState(config(), {}, NOW, { themes: s.themes, active: s.active })
+  assert.equal(out.themes[0].swatch.split, null)
+  assert.equal(out.themes[0].swatch.bg, "#FFFFFF")
+  assert.equal(out.themes[0].swatch.text, "#000000")
+})
+
+// ---------- theme page helpers ----------
+
+test("contrastBadge reads the ratio in Spanish and flags hard-to-read text", () => {
+  assert.deepEqual(E.contrastBadge({ bgColor: "000000", textColor: "FFFFFF" }), { ratio: 21, ok: true, text: "Contraste 21:1" })
+  const low = E.contrastBadge({ bgColor: "777777", textColor: "999999" })
+  assert.equal(low.ok, false)
+  assert.match(low.text, /^Contraste 1,\d:1 · Cuesta leerlo$/)
+  assert.equal(E.contrastBadge({ bgColor: "FFFFFF", textColor: "767676" }).text, "Contraste 4,5:1")
+})
+
+test("fontOptions disables weights and italic a family lacks", () => {
+  const din = E.fontOptions({ fontName: "din-alternate", fontWeight: "bold" })
+  assert.deepEqual(din.weights.map(w => w.label), ["Fina", "Normal", "Media", "Negrita", "Black"])
+  assert.deepEqual(din.weights.map(w => w.available), [false, false, false, true, false])
+  assert.equal(din.weights[3].on, true)
+  assert.equal(din.italic.available, false)
+
+  const avenir = E.fontOptions({ fontName: "avenir-next", fontWeight: "regular" })
+  assert.deepEqual(avenir.weights.map(w => w.available), [true, true, true, true, true])
+  // Avenir's lightest face is UltraLight (200): Fina saves that weight
+  assert.equal(avenir.weights[0].id, "thin")
+  assert.equal(avenir.italic.available, true)
+
+  const system = E.fontOptions({ fontName: "system", fontWeight: "bold" })
+  assert.ok(system.weights.every(w => w.available))
+  assert.equal(system.italic.available, true)
+  // System italic only exists at regular weight
+  const systemItalic = E.fontOptions({ fontName: "system", fontWeight: "bold", fontItalic: true })
+  assert.deepEqual(systemItalic.weights.map(w => w.available), [false, true, false, false, false])
+  assert.equal(systemItalic.italic.on, true)
+  assert.equal(E.fontOptions({ fontName: "rounded" }).italic.available, false)
+})
+
+test("themeSwatch uses the theme's font and its colors for the appearance shown", () => {
+  const sw = E.themeSwatch(ZEN, "auto")
+  assert.deepEqual([sw.bg, sw.text, sw.accent], ["#FDF5E6", "#333333", "#B07D48"])
+  assert.match(sw.font, /Georgia/)
+  assert.equal(sw.split, null)
+  const split = E.themeSwatch(NOIR, "auto").split
+  assert.deepEqual([split.dark.bg, split.light.bg, split.light.text], ["#000000", "#FFFFFF", "#000000"])
+  assert.equal(E.themeSwatch(NOIR, "dark").bg, "#000000")
+})
+
+test("sizeLabel names both sizes, or a fixed one when equal", () => {
+  assert.equal(E.sizeLabel(10, 40), "Chico 10 ↔ Grande 40")
+  assert.equal(E.sizeLabel(20, 20), "Tamaño fijo: 20")
+})
+
+test("setVariants adds light and dark blocks, starting the new one inverted, and removes them", () => {
+  const on = E.setVariants(ZEN, true)
+  assert.deepEqual(on.dark, { bgColor: "FDF5E6", textColor: "333333", accentColor: "B07D48" })
+  assert.deepEqual(on.light, { bgColor: "333333", textColor: "FDF5E6", accentColor: "B07D48" })
+  assert.equal(ZEN.light, undefined)
+  const off = E.setVariants(NOIR, false, "light")
+  assert.equal(off.light, undefined)
+  assert.equal(off.dark, undefined)
+  assert.deepEqual([off.bgColor, off.textColor], ["FFFFFF", "000000"])
+})
+
+test("setThemeColor edits the variant being shown, or the flat colors without variants", () => {
+  const flat = E.setThemeColor(ZEN, "light", "bgColor", "#123456")
+  assert.equal(flat.bgColor, "#123456")
+  assert.equal(flat.light, undefined)
+  const v = E.setThemeColor(NOIR, "light", "accentColor", "FF0000")
+  assert.deepEqual(v.light, { bgColor: "FFFFFF", textColor: "000000", accentColor: "FF0000" })
+  assert.equal(v.accentColor, "0A84FF")
+  assert.equal(NOIR.light.accentColor, undefined)
+})
+
+test("the injected theme helpers behave like the module", () => {
+  const ctx = vm.createContext({ Date, Math, JSON })
+  vm.runInContext(E.pageScript(), ctx)
+  const inPage = js => JSON.parse(vm.runInContext(`JSON.stringify(${js})`, ctx))
+  assert.deepEqual(inPage(`contrastBadge({ bgColor: "FDF5E6", textColor: "333333" })`), E.contrastBadge({ bgColor: "FDF5E6", textColor: "333333" }))
+  assert.deepEqual(inPage(`fontOptions({ fontName: "marker-felt", fontWeight: "bold" })`), E.fontOptions({ fontName: "marker-felt", fontWeight: "bold" }))
+  assert.deepEqual(inPage(`themeSwatch(${JSON.stringify(NOIR)}, "auto")`), E.themeSwatch(NOIR, "auto"))
+  assert.deepEqual(inPage(`setVariants(${JSON.stringify(ZEN)}, true)`), E.setVariants(ZEN, true))
+  assert.equal(vm.runInContext(`sizeLabel(12, 12)`, ctx), "Tamaño fijo: 12")
+  assert.deepEqual(inPage(`validateTheme({ name: "x", bgColor: "000000", textColor: "FFFFFF", minFontSize: 10, maxFontSize: 20, fontName: "system" })`), { ok: true, errors: {} })
+})
+
+test("the HTML has a Tema section between the preview and Orden, with the theme sheet", () => {
+  const html = E.buildHTML({ theme: NOIR, state: E.buildState(config(), {}, NOW, { themes: themeState().themes, active: themeState().active }) })
+  const body = html.slice(html.indexOf("<body>"))
+  const tema = body.indexOf('id="tema"')
+  assert.ok(tema > body.indexOf('id="scrub-time"'))
+  assert.ok(tema < body.indexOf(">Orden<"))
+  assert.match(html, /Tocá para aplicar\. Mantené presionado para editar\. Se aplica a ZenTrate, ZenLendar y ZenDigest\./)
+  assert.ok(html.includes('id="theme-strip"'))
+  assert.ok(html.includes('id="appearance"'))
+  for (const copy of ["Editar tema", "Distinto en modo claro/oscuro", "Cursiva", "Duplicar", "Eliminar tema",
+    "Lo que más usás se ve Grande; lo demás, Chico. Si los igualás, todo queda del mismo tamaño."]) {
+    assert.ok(html.includes(copy), copy)
+  }
+  assert.ok(html.includes('<style id="theme-vars">'))
+})
+
+test("the page opens scrolled to Tema when asked", () => {
+  const state = E.buildState(config(), {}, NOW)
+  assert.match(E.buildHTML({ theme: {}, state, focus: "tema" }), /\{"focus":"tema"\}\)/)
+  assert.match(E.buildHTML({ theme: {}, state }), /\{"focus":null\}\)/)
 })
